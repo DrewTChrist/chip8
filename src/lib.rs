@@ -4,6 +4,7 @@
 
 use embedded_graphics::{
     draw_target::DrawTarget,
+    geometry::Point,
     pixelcolor::Rgb565,
     prelude::*,
     primitives::{PrimitiveStyle, Rectangle},
@@ -17,6 +18,8 @@ const RAM_SIZE: usize = 4096;
 const STACK_SIZE: usize = 16;
 const PROGRAM_START: usize = 0x200;
 const PROGRAM_END: usize = 0xFFF;
+const CHIP8_HEIGHT: usize = 32;
+const CHIP8_WIDTH: usize = 64;
 
 type Nibble = u8;
 type Opcode = (u8, u8);
@@ -32,9 +35,10 @@ where
     registers: [u8; NUM_REGISTERS],
     index: u16,
     program_counter: u16,
-    sp_register: u8,
+    stack_pointer: u8,
     delay_timer: u8,
     sound_timer: u8,
+    pixels: [[bool; CHIP8_WIDTH]; CHIP8_HEIGHT],
 }
 
 impl<D: OriginDimensions + DrawTarget<Color = Rgb565>> Chip8<D> {
@@ -42,14 +46,31 @@ impl<D: OriginDimensions + DrawTarget<Color = Rgb565>> Chip8<D> {
         Self {
             display,
             memory: [0; RAM_SIZE],
+            program_counter: PROGRAM_START as u16,
             stack: [0; STACK_SIZE],
+            stack_pointer: 0,
             registers: [0; NUM_REGISTERS],
             index: 0,
-            program_counter: 0,
-            sp_register: 0,
             delay_timer: 0,
             sound_timer: 0,
+            pixels: [[false; CHIP8_WIDTH]; CHIP8_HEIGHT],
         }
+    }
+
+    pub fn get_program_counter(&self) -> u16 {
+        self.program_counter
+    }
+
+    pub fn get_index(&self) -> u16 {
+        self.index
+    }
+
+    pub fn get_stack(&self) -> [u16; STACK_SIZE] {
+        self.stack
+    }
+
+    pub fn get_registers(&self) -> [u8; NUM_REGISTERS] {
+        self.registers
     }
 
     // copy program into memory
@@ -65,10 +86,11 @@ impl<D: OriginDimensions + DrawTarget<Color = Rgb565>> Chip8<D> {
 
     /// This should be called within a loop
     /// in the main function of the hardware
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self) -> OpcodeDecoded {
         let opcode = self.fetch_opcode();
         let opcode_decoded = self.decode(opcode);
         self.execute(opcode_decoded);
+        opcode_decoded
     }
 
     fn fetch_opcode(&mut self) -> Opcode {
@@ -79,7 +101,7 @@ impl<D: OriginDimensions + DrawTarget<Color = Rgb565>> Chip8<D> {
         self.program_counter += 2;
         opcode
     }
-    
+
     fn decode(&self, opcode: Opcode) -> OpcodeDecoded {
         (
             opcode.0 >> 4,
@@ -93,51 +115,52 @@ impl<D: OriginDimensions + DrawTarget<Color = Rgb565>> Chip8<D> {
         if let Some(op_group) = char::from_digit(opcode.0.into(), 16) {
             match op_group {
                 '0' => {
-                    //self._cls();
-                },
-                '1' => {
-                    //self._jp();
-                },
-                '2' => {
-                },
-                '3' => {
-                },
-                '4' => {
-                },
-                '5' => {
-                },
-                '6' => {
-                    //self._ld_byte();
-                },
-                '7' => {
-                    //self._add_byte();
-                },
-                '8' => {
-                },
-                '9' => {
-                },
-                'a' => {
-                    //self._ld_i_address();
-                },
-                'b' => {
-                },
-                'c' => {
-                },
-                'd' => {
-                    //self._drw();
-                },
-                'e' => {
-                },
-                'f' => {
-                },
-                _ => {
+                    self._cls();
                 }
+                '1' => {
+                    let mut nnn: u16 = 0;
+                    nnn |= opcode.1 as u16;
+                    nnn <<= 4;
+                    nnn |= opcode.2 as u16;
+                    nnn <<= 4;
+                    nnn |= opcode.3 as u16;
+                    self._jp(nnn);
+                }
+                '2' => {}
+                '3' => {}
+                '4' => {}
+                '5' => {}
+                '6' => {
+                    self._ld_byte(opcode.1, (opcode.2 << 4) | opcode.3);
+                }
+                '7' => {
+                    self._add_byte(opcode.1, (opcode.2 << 4) | opcode.3);
+                }
+                '8' => {}
+                '9' => {}
+                'a' => {
+                    let mut nnn: u16 = 0;
+                    nnn |= opcode.1 as u16;
+                    nnn <<= 4;
+                    nnn |= opcode.2 as u16;
+                    nnn <<= 4;
+                    nnn |= opcode.3 as u16;
+                    self._ld_i_address(nnn);
+                }
+                'b' => {}
+                'c' => {}
+                'd' => {
+                    self._drw(opcode.1, opcode.2, opcode.3);
+                }
+                'e' => {}
+                'f' => {}
+                _ => {}
             }
         }
     }
 
     // 0nnn
-    fn _sys(&self, addr: u8) {}
+    fn _sys(&self, nnn: u8) {}
 
     /// 00e0 Clear screen
     fn _cls(&mut self) {
@@ -150,30 +173,30 @@ impl<D: OriginDimensions + DrawTarget<Color = Rgb565>> Chip8<D> {
     fn _ret(&self) {}
 
     /// 1nnn jump
-    fn _jp(&mut self, addr: u16) {
-        self.program_counter = addr;
+    fn _jp(&mut self, nnn: u16) {
+        self.program_counter = nnn;
     }
 
     // 2nnn
-    fn _call(&self, addr: u8) {}
+    fn _call(&self, nnn: u8) {}
 
-    // 3xkk
-    fn _se_byte(&self, x: u8, byte: u8) {}
+    // 3xnn
+    fn _se_byte(&self, x: u8, nn: u8) {}
 
-    // 4xkk
-    fn _sne_byte(&self, x: u8, byte: u8) {}
+    // 4xnn
+    fn _sne_byte(&self, x: u8, nn: u8) {}
 
     // 5xy0
     fn _se_register(&self, x: u8, y: u8) {}
 
-    /// 6xkk Set register vx
-    fn _ld_byte(&mut self, x: u8, byte: u8) {
-        self.registers[x as usize] = byte;
+    /// 6xnn Set register vx
+    fn _ld_byte(&mut self, x: u8, nn: u8) {
+        self.registers[x as usize] = nn;
     }
 
-    /// 7xkk Add value to register vx
-    fn _add_byte(&mut self, x: u8, byte: u8) {
-        self.registers[x as usize] += byte;
+    /// 7xnn Add value to register vx
+    fn _add_byte(&mut self, x: u8, nn: u8) {
+        self.registers[x as usize] += nn;
     }
 
     // 8xy0
@@ -207,18 +230,52 @@ impl<D: OriginDimensions + DrawTarget<Color = Rgb565>> Chip8<D> {
     fn _sne_register(&self, x: u8, y: u8) {}
 
     /// annn set index register i
-    fn _ld_i_address(&mut self, addr: u16) {
-        self.index = addr;
+    fn _ld_i_address(&mut self, nnn: u16) {
+        self.index = nnn;
     }
 
     // bnnn
-    fn _jp_addr(&self, addr: u8) {}
+    fn _jp_addr(&self, nnn: u8) {}
 
-    // cxkk
-    fn _rnd(&self, x: u8, byte: u8) {}
+    // cxnn
+    fn _rnd(&self, x: u8, nn: u8) {}
 
     /// dxyn draw screen
-    fn _drw(&self, x: u8, y: u8, z: u8) {}
+    fn _drw(&mut self, mut x: u8, mut y: u8, n: u8) {
+        let coords: (u8, u8) = (
+            self.registers[x as usize] % 64,
+            self.registers[y as usize] % 32,
+        );
+        self.registers[0xf] = 0;
+        for i in 0..n {
+            let sprite = self.memory[(self.index + i as u16) as usize].reverse_bits();
+            for j in 0..u8::BITS {
+                if (sprite >> j) == 1 && self.pixels[i as usize][j as usize] {
+                    // turn pixel off
+                    self.display.fill_solid(
+                        &Rectangle::new(
+                            Point::new(coords.0.into(), coords.1.into()),
+                            Size::new(32, 32),
+                        ),
+                        Rgb565::BLACK,
+                    );
+                    self.pixels[i as usize][j as usize] = false;
+                } else if (sprite >> j) == 1 && !self.pixels[i as usize][j as usize] {
+                    // turn pixel on
+                    self.display.fill_solid(
+                        &Rectangle::new(
+                            Point::new(coords.0.into(), coords.1.into()),
+                            Size::new(32, 32),
+                        ),
+                        Rgb565::WHITE,
+                    );
+                    self.pixels[i as usize][j as usize] = true;
+                }
+                x += 1;
+            }
+            y += 1;
+        }
+    }
 
     // ex9e
     fn _skp(&self, x: u8) {}

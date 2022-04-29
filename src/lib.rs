@@ -141,7 +141,7 @@ where
                 } else if opcode.3 == 0xe {
                     self._ret();
                 }
-            },
+            }
             '1' => {
                 self.program_counter -= 2;
                 let mut nnn: u16 = 0;
@@ -151,7 +151,7 @@ where
                 nnn <<= 4;
                 nnn |= opcode.3 as u16;
                 self._jp(nnn);
-            },
+            }
             '2' => {
                 self.program_counter -= 2;
                 let mut nnn: u16 = 0;
@@ -161,18 +161,18 @@ where
                 nnn <<= 4;
                 nnn |= opcode.3 as u16;
                 self._call(nnn);
-            },
-            '3' => {},
-            '4' => {},
-            '5' => {},
+            }
+            '3' => {}
+            '4' => {}
+            '5' => {}
             '6' => {
                 self._ld_byte(opcode.1, (opcode.2 << 4) | opcode.3);
-            },
+            }
             '7' => {
                 self._add_byte(opcode.1, (opcode.2 << 4) | opcode.3);
-            },
-            '8' => {},
-            '9' => {},
+            }
+            '8' => {}
+            '9' => {}
             'a' => {
                 let mut nnn: u16 = 0;
                 nnn |= opcode.1 as u16;
@@ -181,15 +181,15 @@ where
                 nnn <<= 4;
                 nnn |= opcode.3 as u16;
                 self._ld_i_address(nnn);
-            },
-            'b' => {},
-            'c' => {},
+            }
+            'b' => {}
+            'c' => {}
             'd' => {
                 self._drw(opcode.1, opcode.2, opcode.3);
-            },
-            'e' => {},
-            'f' => {},
-            _ => {},
+            }
+            'e' => {}
+            'f' => {}
+            _ => {}
         }
     }
 
@@ -284,8 +284,8 @@ where
     fn _rnd(&self, x: u8, nn: u8) {}
 
     /// dxyn draw screen
-    fn _drw(&mut self, mut x: u8, mut y: u8, n: u8) {
-        let coords: (u8, u8) = (
+    fn _drw(&mut self, x: u8, y: u8, n: u8) {
+        let mut coords: (u8, u8) = (
             self.registers[x as usize] % 64,
             self.registers[y as usize] % 32,
         );
@@ -293,38 +293,34 @@ where
         for i in 0..n {
             let sprite = self.memory[(self.index + i as u16) as usize].reverse_bits();
             for j in 0..u8::BITS {
-                if (sprite >> j) == 1 && self.pixels[i as usize][j as usize] {
+                //if (sprite >> j) == 1 && self.pixels[i as usize][j as usize] {
+                if (sprite >> j) == 1 && self.pixels[coords.0 as usize][coords.1 as usize] {
                     // turn pixel off
-                    if self
-                        .display
-                        .fill_solid(
-                            &Rectangle::new(
-                                Point::new(coords.0.into(), coords.1.into()),
-                                Size::new(3, 4),
-                            ),
-                            Rgb565::BLACK,
-                        )
-                        .is_err()
-                    {}
-                    self.pixels[i as usize][j as usize] = false;
-                } else if (sprite >> j) == 1 && !self.pixels[i as usize][j as usize] {
+                    let point = Point::new((coords.0 * 4).into(), (coords.1 * 2).into());
+                    let rect = &Rectangle::new(point, Size::new(4, 2));
+                    if self.display.fill_solid(rect, Rgb565::BLACK).is_err() {}
+                    self.pixels[coords.0 as usize][coords.1 as usize] = false;
+                //} else if (sprite >> j) == 1 && !self.pixels[i as usize][j as usize] {
+                } else if (sprite >> j) == 1 && !self.pixels[coords.0 as usize][coords.1 as usize] {
                     // turn pixel on
-                    if self
-                        .display
-                        .fill_solid(
-                            &Rectangle::new(
-                                Point::new((coords.0*3).into(), (coords.1*4).into()),
-                                Size::new(3, 4),
-                            ),
-                            Rgb565::WHITE,
-                        )
-                        .is_err()
-                    {}
-                    self.pixels[i as usize][j as usize] = true;
+                    let point = Point::new((coords.0 * 4).into(), (coords.1 * 2).into());
+                    let rect = &Rectangle::new(point, Size::new(4, 2));
+                    if self.display.fill_solid(rect, Rgb565::WHITE).is_err() {}
+                    self.pixels[coords.0 as usize][coords.1 as usize] = true;
                 }
-                x += 1;
+                //x += 1;
+                if coords.0 < (CHIP8_HEIGHT - 1) as u8 {
+                    coords.0 += 1;
+                } else {
+                    break;
+                }
             }
-            y += 1;
+            //y += 1;
+            if coords.1 < (CHIP8_WIDTH - 1) as u8 {
+                coords.1 += 1;
+            } else {
+                break;
+            }
         }
     }
 

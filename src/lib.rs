@@ -23,7 +23,7 @@ const CHIP8_WIDTH: usize = 64;
 
 type Nibble = u8;
 type Opcode = (u8, u8);
-type OpcodeDecoded = (u8, Nibble, Nibble, Nibble);
+type OpcodeDecoded = (char, Nibble, Nibble, Nibble);
 
 pub struct Chip8<D>
 where
@@ -104,7 +104,7 @@ impl<D: OriginDimensions + DrawTarget<Color = Rgb565>> Chip8<D> {
 
     fn decode(&self, opcode: Opcode) -> OpcodeDecoded {
         (
-            opcode.0 >> 4,
+            char::from_digit((opcode.0 >> 4).into(), 16).unwrap(),
             opcode.0.rotate_left(4) >> 4,
             opcode.1 >> 4,
             opcode.1.rotate_left(4) >> 4,
@@ -112,50 +112,48 @@ impl<D: OriginDimensions + DrawTarget<Color = Rgb565>> Chip8<D> {
     }
 
     fn execute(&mut self, opcode: OpcodeDecoded) {
-        if let Some(op_group) = char::from_digit(opcode.0.into(), 16) {
-            match op_group {
-                '0' => {
-                    self._cls();
-                }
-                '1' => {
-                    let mut nnn: u16 = 0;
-                    nnn |= opcode.1 as u16;
-                    nnn <<= 4;
-                    nnn |= opcode.2 as u16;
-                    nnn <<= 4;
-                    nnn |= opcode.3 as u16;
-                    self._jp(nnn);
-                }
-                '2' => {}
-                '3' => {}
-                '4' => {}
-                '5' => {}
-                '6' => {
-                    self._ld_byte(opcode.1, (opcode.2 << 4) | opcode.3);
-                }
-                '7' => {
-                    self._add_byte(opcode.1, (opcode.2 << 4) | opcode.3);
-                }
-                '8' => {}
-                '9' => {}
-                'a' => {
-                    let mut nnn: u16 = 0;
-                    nnn |= opcode.1 as u16;
-                    nnn <<= 4;
-                    nnn |= opcode.2 as u16;
-                    nnn <<= 4;
-                    nnn |= opcode.3 as u16;
-                    self._ld_i_address(nnn);
-                }
-                'b' => {}
-                'c' => {}
-                'd' => {
-                    self._drw(opcode.1, opcode.2, opcode.3);
-                }
-                'e' => {}
-                'f' => {}
-                _ => {}
+        match opcode.0 {
+            '0' => {
+                self._cls();
             }
+            '1' => {
+                let mut nnn: u16 = 0;
+                nnn |= opcode.1 as u16;
+                nnn <<= 4;
+                nnn |= opcode.2 as u16;
+                nnn <<= 4;
+                nnn |= opcode.3 as u16;
+                self._jp(nnn);
+            }
+            '2' => {}
+            '3' => {}
+            '4' => {}
+            '5' => {}
+            '6' => {
+                self._ld_byte(opcode.1, (opcode.2 << 4) | opcode.3);
+            }
+            '7' => {
+                self._add_byte(opcode.1, (opcode.2 << 4) | opcode.3);
+            }
+            '8' => {}
+            '9' => {}
+            'a' => {
+                let mut nnn: u16 = 0;
+                nnn |= opcode.1 as u16;
+                nnn <<= 4;
+                nnn |= opcode.2 as u16;
+                nnn <<= 4;
+                nnn |= opcode.3 as u16;
+                self._ld_i_address(nnn);
+            }
+            'b' => {}
+            'c' => {}
+            'd' => {
+                self._drw(opcode.1, opcode.2, opcode.3);
+            }
+            'e' => {}
+            'f' => {}
+            _ => {}
         }
     }
 

@@ -2,6 +2,9 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
+pub mod keypad;
+pub mod roms;
+
 use embedded_graphics::{
     draw_target::DrawTarget,
     geometry::Point,
@@ -10,8 +13,9 @@ use embedded_graphics::{
     primitives::{PrimitiveStyle, Rectangle},
     Drawable,
 };
+use embedded_hal::digital::v2::{InputPin, OutputPin};
 
-pub mod roms;
+use keypad::KeyPad;
 
 const NUM_REGISTERS: usize = 16;
 const RAM_SIZE: usize = 4096;
@@ -25,11 +29,14 @@ type Nibble = u8;
 type Opcode = (u8, u8);
 type OpcodeDecoded = (char, Nibble, Nibble, Nibble);
 
-pub struct Chip8<D>
+pub struct Chip8<D, O, I>
 where
     D: DrawTarget,
+    O: OutputPin,
+    I: InputPin,
 {
     display: D,
+    keypad: KeyPad<O, I>,
     memory: [u8; RAM_SIZE],
     stack: [u16; STACK_SIZE],
     registers: [u8; NUM_REGISTERS],
@@ -41,10 +48,21 @@ where
     pixels: [[bool; CHIP8_WIDTH]; CHIP8_HEIGHT],
 }
 
-impl<D: OriginDimensions + DrawTarget<Color = Rgb565>> Chip8<D> {
-    pub fn new(display: D) -> Self {
+impl<D, O, I> Chip8<D, O, I>
+where
+    D: OriginDimensions + DrawTarget<Color = Rgb565>,
+    O: OutputPin,
+    I: InputPin,
+{
+    pub fn new<E>(display: D, keypad: KeyPad<O, I>) -> Self
+    where
+        D: OriginDimensions + DrawTarget<Color = Rgb565>,
+        O: OutputPin<Error = E>,
+        I: InputPin<Error = E>,
+    {
         Self {
             display,
+            keypad,
             memory: [0; RAM_SIZE],
             program_counter: PROGRAM_START as u16,
             stack: [0; STACK_SIZE],
@@ -162,9 +180,11 @@ impl<D: OriginDimensions + DrawTarget<Color = Rgb565>> Chip8<D> {
 
     /// 00e0 Clear screen
     fn _cls(&mut self) {
-        Rectangle::new(Point::new(0, 0), self.display.size())
+        if Rectangle::new(Point::new(0, 0), self.display.size())
             .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
-            .draw(&mut self.display);
+            .draw(&mut self.display)
+            .is_err()
+        {}
     }
 
     // 00ee
@@ -250,23 +270,31 @@ impl<D: OriginDimensions + DrawTarget<Color = Rgb565>> Chip8<D> {
             for j in 0..u8::BITS {
                 if (sprite >> j) == 1 && self.pixels[i as usize][j as usize] {
                     // turn pixel off
-                    self.display.fill_solid(
-                        &Rectangle::new(
-                            Point::new(coords.0.into(), coords.1.into()),
-                            Size::new(32, 32),
-                        ),
-                        Rgb565::BLACK,
-                    );
+                    if self
+                        .display
+                        .fill_solid(
+                            &Rectangle::new(
+                                Point::new(coords.0.into(), coords.1.into()),
+                                Size::new(32, 32),
+                            ),
+                            Rgb565::BLACK,
+                        )
+                        .is_err()
+                    {}
                     self.pixels[i as usize][j as usize] = false;
                 } else if (sprite >> j) == 1 && !self.pixels[i as usize][j as usize] {
                     // turn pixel on
-                    self.display.fill_solid(
-                        &Rectangle::new(
-                            Point::new(coords.0.into(), coords.1.into()),
-                            Size::new(32, 32),
-                        ),
-                        Rgb565::WHITE,
-                    );
+                    if self
+                        .display
+                        .fill_solid(
+                            &Rectangle::new(
+                                Point::new(coords.0.into(), coords.1.into()),
+                                Size::new(32, 32),
+                            ),
+                            Rgb565::WHITE,
+                        )
+                        .is_err()
+                    {}
                     self.pixels[i as usize][j as usize] = true;
                 }
                 x += 1;

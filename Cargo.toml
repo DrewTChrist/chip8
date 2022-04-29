@@ -10,5 +10,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-embedded-hal = "0.2"
+embedded-hal = { version = "0.2", features=["unproven"] }
 embedded-graphics = "0.7.1"

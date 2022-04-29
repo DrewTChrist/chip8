@@ -42,7 +42,7 @@ where
     registers: [u8; NUM_REGISTERS],
     index: u16,
     program_counter: u16,
-    stack_pointer: u8,
+    stack_pointer: usize,
     delay_timer: u8,
     sound_timer: u8,
     pixels: [[bool; CHIP8_WIDTH]; CHIP8_HEIGHT],
@@ -73,6 +73,10 @@ where
             sound_timer: 0,
             pixels: [[false; CHIP8_WIDTH]; CHIP8_HEIGHT],
         }
+    }
+
+    pub fn get_memory(&self) -> &[u8] {
+        &self.memory[PROGRAM_START..PROGRAM_END]
     }
 
     pub fn get_program_counter(&self) -> u16 {
@@ -132,9 +136,14 @@ where
     fn execute(&mut self, opcode: OpcodeDecoded) {
         match opcode.0 {
             '0' => {
-                self._cls();
-            }
+                if opcode.3 == 0x0 {
+                    self._cls();
+                } else if opcode.3 == 0xe {
+                    self._ret();
+                }
+            },
             '1' => {
+                self.program_counter -= 2;
                 let mut nnn: u16 = 0;
                 nnn |= opcode.1 as u16;
                 nnn <<= 4;
@@ -142,19 +151,28 @@ where
                 nnn <<= 4;
                 nnn |= opcode.3 as u16;
                 self._jp(nnn);
-            }
-            '2' => {}
-            '3' => {}
-            '4' => {}
-            '5' => {}
+            },
+            '2' => {
+                self.program_counter -= 2;
+                let mut nnn: u16 = 0;
+                nnn |= opcode.1 as u16;
+                nnn <<= 4;
+                nnn |= opcode.2 as u16;
+                nnn <<= 4;
+                nnn |= opcode.3 as u16;
+                self._call(nnn);
+            },
+            '3' => {},
+            '4' => {},
+            '5' => {},
             '6' => {
                 self._ld_byte(opcode.1, (opcode.2 << 4) | opcode.3);
-            }
+            },
             '7' => {
                 self._add_byte(opcode.1, (opcode.2 << 4) | opcode.3);
-            }
-            '8' => {}
-            '9' => {}
+            },
+            '8' => {},
+            '9' => {},
             'a' => {
                 let mut nnn: u16 = 0;
                 nnn |= opcode.1 as u16;
@@ -163,15 +181,15 @@ where
                 nnn <<= 4;
                 nnn |= opcode.3 as u16;
                 self._ld_i_address(nnn);
-            }
-            'b' => {}
-            'c' => {}
+            },
+            'b' => {},
+            'c' => {},
             'd' => {
                 self._drw(opcode.1, opcode.2, opcode.3);
-            }
-            'e' => {}
-            'f' => {}
-            _ => {}
+            },
+            'e' => {},
+            'f' => {},
+            _ => {},
         }
     }
 
@@ -188,7 +206,10 @@ where
     }
 
     // 00ee
-    fn _ret(&self) {}
+    fn _ret(&mut self) {
+        self.program_counter = self.stack[self.stack_pointer];
+        self.stack_pointer -= 1;
+    }
 
     /// 1nnn jump
     fn _jp(&mut self, nnn: u16) {
@@ -196,7 +217,11 @@ where
     }
 
     // 2nnn
-    fn _call(&self, nnn: u8) {}
+    fn _call(&mut self, nnn: u16) {
+        self.stack_pointer += 1;
+        self.stack[self.stack_pointer] = self.program_counter;
+        self.program_counter = nnn;
+    }
 
     // 3xnn
     fn _se_byte(&self, x: u8, nn: u8) {}
@@ -275,7 +300,7 @@ where
                         .fill_solid(
                             &Rectangle::new(
                                 Point::new(coords.0.into(), coords.1.into()),
-                                Size::new(32, 32),
+                                Size::new(3, 4),
                             ),
                             Rgb565::BLACK,
                         )
@@ -288,8 +313,8 @@ where
                         .display
                         .fill_solid(
                             &Rectangle::new(
-                                Point::new(coords.0.into(), coords.1.into()),
-                                Size::new(32, 32),
+                                Point::new((coords.0*3).into(), (coords.1*4).into()),
+                                Size::new(3, 4),
                             ),
                             Rgb565::WHITE,
                         )

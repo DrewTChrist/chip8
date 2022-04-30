@@ -14,8 +14,8 @@ use embedded_graphics::{
     Drawable,
 };
 use embedded_hal::digital::v2::{InputPin, OutputPin};
-
 use keypad::KeyPad;
+use rand::RngCore;
 
 const NUM_REGISTERS: usize = 16;
 const RAM_SIZE: usize = 4096;
@@ -25,15 +25,53 @@ const PROGRAM_END: usize = 0xFFF;
 const CHIP8_HEIGHT: usize = 32;
 const CHIP8_WIDTH: usize = 64;
 
-type Nibble = u8;
-type Opcode = (u8, u8);
-type OpcodeDecoded = (char, Nibble, Nibble, Nibble);
+/// These bytes should be treated as half bytes
+pub type Nibble = u8;
+/// Two byte opcode
+pub type Opcode = (u8, u8);
+/// Opcode broken into four nibbles
+pub type OpcodeDecoded = (Nibble, Nibble, Nibble, Nibble);
 
-pub struct Chip8<D, O, I>
+/// Combines the last three
+/// nibbles of an opcode into a u16
+fn nnn(opcode: OpcodeDecoded) -> u16 {
+    let mut nnn: u16 = 0;
+    nnn |= opcode.1 as u16;
+    nnn <<= 4;
+    nnn |= opcode.2 as u16;
+    nnn <<= 4;
+    nnn |= opcode.3 as u16;
+    nnn
+}
+
+/// Combines the third and fourth
+/// nibbles of an opcode into a single byte
+fn nn(opcode: OpcodeDecoded) -> u8 {
+    (opcode.2 << 4) | opcode.3
+}
+
+/// A no_std Chip8 implementation
+///
+/// #### Use this with your microcontroller:
+/// You need:
+/// * A microcontroller capable of generating random numbers
+/// * A display with a driver that implements the OriginDimensions and DrawTarget traits from embedded_graphics
+///     * ie st7735
+/// * Enough free pins to create a button matrix (8 pins) and your display
+///
+/// #### Examples:
+/// <https://github.com/drewtchrist/chip8-pico>
+///
+/// #### Timing:
+/// Timing should be handled by the peripherals of
+/// your hardware. This Chip8 implementation makes no attempts to manage
+/// the speed of itself.
+pub struct Chip8<D, O, I, R>
 where
     D: DrawTarget,
     O: OutputPin,
     I: InputPin,
+    R: RngCore,
 {
     display: D,
     keypad: KeyPad<O, I>,
@@ -46,19 +84,22 @@ where
     delay_timer: u8,
     sound_timer: u8,
     pixels: [[bool; CHIP8_WIDTH]; CHIP8_HEIGHT],
+    rng: R,
 }
 
-impl<D, O, I> Chip8<D, O, I>
+impl<D, O, I, R> Chip8<D, O, I, R>
 where
     D: OriginDimensions + DrawTarget<Color = Rgb565>,
     O: OutputPin,
     I: InputPin,
+    R: RngCore,
 {
-    pub fn new<E>(display: D, keypad: KeyPad<O, I>) -> Self
+    pub fn new<E>(display: D, keypad: KeyPad<O, I>, rng: R) -> Self
     where
         D: OriginDimensions + DrawTarget<Color = Rgb565>,
         O: OutputPin<Error = E>,
         I: InputPin<Error = E>,
+        R: RngCore,
     {
         Self {
             display,
@@ -72,30 +113,45 @@ where
             delay_timer: 0,
             sound_timer: 0,
             pixels: [[false; CHIP8_WIDTH]; CHIP8_HEIGHT],
+            rng,
         }
     }
 
-    pub fn get_memory(&self) -> &[u8] {
+    /// Returns the current opcode
+    ///
+    /// Note that the `tick` method will update
+    /// the program counter so this will return something
+    /// different depending on if it is called before or after `tick`
+    pub fn get_current_op(&self) -> OpcodeDecoded {
+        self.decode(self.fetch_opcode())
+    }
+
+    /// Returns a slice of the program memory
+    pub fn get_program_memory(&self) -> &[u8] {
         &self.memory[PROGRAM_START..PROGRAM_END]
     }
 
+    /// Returns the value of PC or program counter
     pub fn get_program_counter(&self) -> u16 {
         self.program_counter
     }
 
+    /// Returns the value in the I register
     pub fn get_index(&self) -> u16 {
         self.index
     }
 
+    /// Returns the stack
     pub fn get_stack(&self) -> [u16; STACK_SIZE] {
         self.stack
     }
 
+    /// Returns the data registers
     pub fn get_registers(&self) -> [u8; NUM_REGISTERS] {
         self.registers
     }
 
-    // copy program into memory
+    /// Copies a chip8 program into memory
     pub fn load_program<const S: usize>(&mut self, program: [u16; S]) {
         let mut current = PROGRAM_START;
         for op in program {
@@ -106,27 +162,42 @@ where
         }
     }
 
+    /// Resets the chip8 interpreter
+    /// by clearing all memory and registers
+    pub fn reset(&mut self) {
+        self.memory = [0; RAM_SIZE];
+        self.program_counter = PROGRAM_START as u16;
+        self.stack = [0; STACK_SIZE];
+        self.stack_pointer = 0;
+        self.registers = [0; NUM_REGISTERS];
+        self.index = 0;
+        self.delay_timer = 0;
+        self.sound_timer = 0;
+        self.pixels = [[false; CHIP8_WIDTH]; CHIP8_HEIGHT];
+    }
+
     /// This should be called within a loop
     /// in the main function of the hardware
-    pub fn tick(&mut self) -> OpcodeDecoded {
+    ///
+    /// Note there is no time management here
+    /// so this Chip8 will run very fast without a delay
+    pub fn tick(&mut self) {
         let opcode = self.fetch_opcode();
         let opcode_decoded = self.decode(opcode);
         self.execute(opcode_decoded);
-        opcode_decoded
     }
 
-    fn fetch_opcode(&mut self) -> Opcode {
+    fn fetch_opcode(&self) -> Opcode {
         let opcode: Opcode = (
             self.memory[self.program_counter as usize],
             self.memory[(self.program_counter + 1) as usize],
         );
-        self.program_counter += 2;
         opcode
     }
 
     fn decode(&self, opcode: Opcode) -> OpcodeDecoded {
         (
-            char::from_digit((opcode.0 >> 4).into(), 16).unwrap(),
+            opcode.0 >> 4,
             opcode.0.rotate_left(4) >> 4,
             opcode.1 >> 4,
             opcode.1.rotate_left(4) >> 4,
@@ -134,160 +205,181 @@ where
     }
 
     fn execute(&mut self, opcode: OpcodeDecoded) {
+        let mut pc_increment: u16 = 2;
+        let mut update_pc: bool = true;
+        let mut skip_instruction: bool = false;
         match opcode.0 {
-            '0' => {
+            0x0 => {
                 if opcode.3 == 0x0 {
-                    self._cls();
+                    self._00e0();
                 } else if opcode.3 == 0xe {
-                    self._ret();
+                    self._00ee();
                 }
             }
-            '1' => {
-                self.program_counter -= 2;
-                let mut nnn: u16 = 0;
-                nnn |= opcode.1 as u16;
-                nnn <<= 4;
-                nnn |= opcode.2 as u16;
-                nnn <<= 4;
-                nnn |= opcode.3 as u16;
-                self._jp(nnn);
+            0x1 => {
+                self._1nnn(nnn(opcode));
+                update_pc = false;
             }
-            '2' => {
-                self.program_counter -= 2;
-                let mut nnn: u16 = 0;
-                nnn |= opcode.1 as u16;
-                nnn <<= 4;
-                nnn |= opcode.2 as u16;
-                nnn <<= 4;
-                nnn |= opcode.3 as u16;
-                self._call(nnn);
+            0x2 => {
+                self._2nnn(nnn(opcode));
+                update_pc = false;
             }
-            '3' => {}
-            '4' => {}
-            '5' => {}
-            '6' => {
-                self._ld_byte(opcode.1, (opcode.2 << 4) | opcode.3);
+            0x3 => {
+                skip_instruction = self._3xnn(opcode.0, nn(opcode));
             }
-            '7' => {
-                self._add_byte(opcode.1, (opcode.2 << 4) | opcode.3);
+            0x4 => {
+                skip_instruction = self._4xnn(opcode.0, nn(opcode));
             }
-            '8' => {}
-            '9' => {}
-            'a' => {
-                let mut nnn: u16 = 0;
-                nnn |= opcode.1 as u16;
-                nnn <<= 4;
-                nnn |= opcode.2 as u16;
-                nnn <<= 4;
-                nnn |= opcode.3 as u16;
-                self._ld_i_address(nnn);
+            0x5 => {
+                skip_instruction = self._5xy0(opcode.0, opcode.1);
             }
-            'b' => {}
-            'c' => {}
-            'd' => {
-                self._drw(opcode.1, opcode.2, opcode.3);
+            0x6 => {
+                self._6xnn(opcode.1, nn(opcode));
             }
-            'e' => {}
-            'f' => {}
+            0x7 => {
+                self._7xnn(opcode.1, nn(opcode));
+            }
+            0x8 => {
+                // decode further
+            }
+            0x9 => {
+                skip_instruction = self._5xy0(opcode.0, opcode.1);
+            }
+            0xa => {
+                self._annn(nnn(opcode));
+            }
+            0xb => {
+                self._bnnn(nnn(opcode));
+                update_pc = false;
+            }
+            0xc => {
+                self._cxnn(opcode.1, nn(opcode));
+            }
+            0xd => {
+                self._dxyn(opcode.1, opcode.2, opcode.3);
+            }
+            0xe => {
+                // decode further
+            }
+            0xf => {
+                // decode further
+            }
             _ => {}
+        }
+        if skip_instruction {
+            pc_increment += 2;
+        }
+        if update_pc {
+            self.program_counter += pc_increment;
         }
     }
 
-    // 0nnn
-    fn _sys(&self, nnn: u8) {}
+    /// 0nnn
+    fn _0nnn(&self, nnn: u8) {}
 
     /// 00e0 Clear screen
-    fn _cls(&mut self) {
-        if Rectangle::new(Point::new(0, 0), self.display.size())
-            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
-            .draw(&mut self.display)
-            .is_err()
-        {}
+    fn _00e0(&mut self) {
+        let rect = Rectangle::new(Point::new(0, 0), self.display.size())
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK));
+        if rect.draw(&mut self.display).is_err() {}
     }
 
-    // 00ee
-    fn _ret(&mut self) {
+    /// 00ee return
+    fn _00ee(&mut self) {
         self.program_counter = self.stack[self.stack_pointer];
         self.stack_pointer -= 1;
     }
 
     /// 1nnn jump
-    fn _jp(&mut self, nnn: u16) {
+    fn _1nnn(&mut self, nnn: u16) {
         self.program_counter = nnn;
     }
 
-    // 2nnn
-    fn _call(&mut self, nnn: u16) {
+    /// 2nnn
+    fn _2nnn(&mut self, nnn: u16) {
         self.stack_pointer += 1;
         self.stack[self.stack_pointer] = self.program_counter;
         self.program_counter = nnn;
     }
 
-    // 3xnn
-    fn _se_byte(&self, x: u8, nn: u8) {}
+    /// 3xnn
+    fn _3xnn(&self, x: Nibble, nn: u8) -> bool {
+        self.registers[x as usize] == nn
+    }
 
-    // 4xnn
-    fn _sne_byte(&self, x: u8, nn: u8) {}
+    /// 4xnn
+    fn _4xnn(&self, x: Nibble, nn: u8) -> bool {
+        self.registers[x as usize] != nn
+    }
 
-    // 5xy0
-    fn _se_register(&self, x: u8, y: u8) {}
+    /// 5xy0
+    fn _5xy0(&self, x: Nibble, y: Nibble) -> bool {
+        self.registers[x as usize] == self.registers[y as usize]
+    }
 
-    /// 6xnn Set register vx
-    fn _ld_byte(&mut self, x: u8, nn: u8) {
+    /// 6xnn Set register vx to nn
+    fn _6xnn(&mut self, x: Nibble, nn: u8) {
         self.registers[x as usize] = nn;
     }
 
-    /// 7xnn Add value to register vx
-    fn _add_byte(&mut self, x: u8, nn: u8) {
+    /// 7xnn Add nn to register vx
+    fn _7xnn(&mut self, x: Nibble, nn: u8) {
         self.registers[x as usize] += nn;
     }
 
-    // 8xy0
-    fn _ld_register(&self, x: u8, y: u8) {}
+    /// 8xy0
+    fn _8xy0(&self, x: Nibble, y: Nibble) {}
 
-    // 8xy1
-    fn _or(&self, x: u8, y: u8) {}
+    /// 8xy1
+    fn _8xy1(&self, x: Nibble, y: Nibble) {}
 
-    // 8xy2
-    fn _and(&self, x: u8, y: u8) {}
+    /// 8xy2
+    fn _8xy2(&self, x: Nibble, y: Nibble) {}
 
-    // 8xy3
-    fn _xor(&self, x: u8, y: u8) {}
+    /// 8xy3
+    fn _8xy3(&self, x: Nibble, y: Nibble) {}
 
-    // 8xy4
-    fn _add_register(&self, x: u8, y: u8) {}
+    /// 8xy4
+    fn _8xy4(&self, x: Nibble, y: Nibble) {}
 
-    // 8xy5
-    fn _sub(&self, x: u8, y: u8) {}
+    /// 8xy5
+    fn _8xy5(&self, x: Nibble, y: Nibble) {}
 
-    // 8xy6
-    fn _shr(&self, x: u8) {}
+    /// 8xy6
+    fn _8xy6(&self, x: Nibble) {}
 
-    // 8xy7
-    fn _subn(&self, x: u8, y: u8) {}
+    /// 8xy7
+    fn _8xy7(&self, x: Nibble, y: Nibble) {}
 
-    // 8xye
-    fn _shl(&self, x: u8) {}
+    /// 8xye
+    fn _8xye(&self, x: Nibble) {}
 
-    // 9xy0
-    fn _sne_register(&self, x: u8, y: u8) {}
+    /// 9xy0
+    fn _9xy0(&self, x: Nibble, y: Nibble) -> bool {
+        self.registers[x as usize] != self.registers[y as usize]
+    }
 
     /// annn set index register i
-    fn _ld_i_address(&mut self, nnn: u16) {
+    fn _annn(&mut self, nnn: u16) {
         self.index = nnn;
     }
 
-    // bnnn
-    fn _jp_addr(&self, nnn: u8) {}
+    /// bnnn Jump with offset
+    fn _bnnn(&mut self, nnn: u16) {
+        self.program_counter = nnn + self.registers[0] as u16;
+    }
 
-    // cxnn
-    fn _rnd(&self, x: u8, nn: u8) {}
+    /// cxnn Random number
+    fn _cxnn(&mut self, x: Nibble, nn: u8) {
+        let rand_num: u8 = (self.rng.next_u32() >> 28) as u8;
+        self.registers[x as usize] = rand_num & nn;
+    }
 
     /// dxyn draw screen
-    fn _drw(&mut self, x: u8, y: u8, n: u8) {
+    fn _dxyn(&mut self, x: Nibble, y: Nibble, n: Nibble) {
         let mut coords: (u8, u8) = (
-            self.registers[x as usize] % 64,
-            self.registers[y as usize] % 32,
+            self.registers[x as usize] % (CHIP8_WIDTH as u8),
+            self.registers[y as usize] % (CHIP8_HEIGHT as u8),
         );
         self.registers[0xf] = 0;
         for i in 0..n {
@@ -324,36 +416,36 @@ where
         }
     }
 
-    // ex9e
-    fn _skp(&self, x: u8) {}
+    /// ex9e
+    fn _ex9e(&self, x: Nibble) {}
 
-    // exa1
-    fn _sknp(&self, x: u8) {}
+    /// exa1
+    fn _exa1(&self, x: Nibble) {}
 
-    // fx07
-    fn _delay_timer_to_register(&self, x: u8) {}
+    /// fx07
+    fn _fx07(&self, x: Nibble) {}
 
-    // fx0a
-    fn _keypress_to_register(&self, x: u8) {}
+    /// fx0a
+    fn _fx0a(&self, x: Nibble) {}
 
-    // fx15
-    fn _delay_timer_from_register(&self, x: u8) {}
+    /// fx15
+    fn _fx15(&self, x: Nibble) {}
 
-    // fx18
-    fn _sound_timer_from_register(&self, x: u8) {}
+    /// fx18
+    fn _fx18(&self, x: Nibble) {}
 
-    // fx1e
-    fn _add_i(&self, x: u8) {}
+    /// fx1e
+    fn _fx1e(&self, x: Nibble) {}
 
-    // fx29
-    fn _ld_i(&self, x: u8) {}
+    /// fx29
+    fn _fx29(&self, x: Nibble) {}
 
-    // fx33
-    fn _ld_b(&self, x: u8) {}
+    /// fx33
+    fn _fx33(&self, x: Nibble) {}
 
-    // fx55
-    fn _store_registers_at_i(&self, x: u8) {}
+    /// fx55
+    fn _fx55(&self, x: Nibble) {}
 
-    // fx65
-    fn _read_registers_at_i(&self, x: u8) {}
+    /// fx65
+    fn _fx65(&self, x: Nibble) {}
 }

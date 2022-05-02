@@ -83,7 +83,7 @@ where
     stack_pointer: usize,
     delay_timer: u8,
     sound_timer: u8,
-    pixels: [[bool; CHIP8_WIDTH]; CHIP8_HEIGHT],
+    pixels: [[bool; CHIP8_HEIGHT]; CHIP8_WIDTH],
     rng: R,
 }
 
@@ -112,7 +112,7 @@ where
             index: 0,
             delay_timer: 0,
             sound_timer: 0,
-            pixels: [[false; CHIP8_WIDTH]; CHIP8_HEIGHT],
+            pixels: [[false; CHIP8_HEIGHT]; CHIP8_WIDTH],
             rng,
         }
     }
@@ -151,6 +151,11 @@ where
         self.registers
     }
 
+    /// Returns the display pixel grid
+    pub fn get_pixels(&self) -> [[bool; CHIP8_HEIGHT]; CHIP8_WIDTH] {
+        self.pixels
+    }
+
     /// Copies a chip8 program into memory
     pub fn load_program<const S: usize>(&mut self, program: [u16; S]) {
         let mut current = PROGRAM_START;
@@ -173,7 +178,7 @@ where
         self.index = 0;
         self.delay_timer = 0;
         self.sound_timer = 0;
-        self.pixels = [[false; CHIP8_WIDTH]; CHIP8_HEIGHT];
+        self.pixels = [[false; CHIP8_HEIGHT]; CHIP8_WIDTH];
     }
 
     /// This should be called within a loop
@@ -377,41 +382,31 @@ where
 
     /// dxyn draw screen
     fn _dxyn(&mut self, x: Nibble, y: Nibble, n: Nibble) {
-        let mut coords: (u8, u8) = (
+        let coords: (u8, u8) = (
             self.registers[x as usize] % (CHIP8_WIDTH as u8),
             self.registers[y as usize] % (CHIP8_HEIGHT as u8),
         );
         self.registers[0xf] = 0;
         for i in 0..n {
-            let sprite = self.memory[(self.index + i as u16) as usize].reverse_bits();
+            let sprite = self.memory[(self.index + i as u16) as usize];
             for j in 0..u8::BITS {
-                //if (sprite >> j) == 1 && self.pixels[i as usize][j as usize] {
-                if (sprite >> j) == 1 && self.pixels[coords.0 as usize][coords.1 as usize] {
-                    // turn pixel off
-                    let point = Point::new((coords.0 * 4).into(), (coords.1 * 2).into());
-                    let rect = &Rectangle::new(point, Size::new(4, 2));
-                    if self.display.fill_solid(rect, Rgb565::BLACK).is_err() {}
-                    self.pixels[coords.0 as usize][coords.1 as usize] = false;
-                //} else if (sprite >> j) == 1 && !self.pixels[i as usize][j as usize] {
-                } else if (sprite >> j) == 1 && !self.pixels[coords.0 as usize][coords.1 as usize] {
-                    // turn pixel on
-                    let point = Point::new((coords.0 * 4).into(), (coords.1 * 2).into());
-                    let rect = &Rectangle::new(point, Size::new(4, 2));
-                    if self.display.fill_solid(rect, Rgb565::WHITE).is_err() {}
-                    self.pixels[coords.0 as usize][coords.1 as usize] = true;
+                if sprite & (1 << j) != 0 {
+                    let point = Point::new(
+                        ((coords.0 + j as u8) * 2).into(),
+                        ((coords.1 + i as u8) * 4).into(),
+                    );
+                    let rect = &Rectangle::new(point, Size::new(2, 4));
+                    if self.pixels[(coords.0 + j as u8) as usize][(coords.1 + i as u8) as usize] {
+                        if self.display.fill_solid(rect, Rgb565::BLACK).is_err() {}
+                        self.pixels[(coords.0 + j as u8) as usize][(coords.1 + i as u8) as usize] =
+                            false;
+                        self.registers[0xf] = 1;
+                    } else {
+                        if self.display.fill_solid(rect, Rgb565::WHITE).is_err() {}
+                        self.pixels[(coords.0 + j as u8) as usize][(coords.1 + i as u8) as usize] =
+                            true;
+                    }
                 }
-                //x += 1;
-                if coords.0 < (CHIP8_HEIGHT - 1) as u8 {
-                    coords.0 += 1;
-                } else {
-                    break;
-                }
-            }
-            //y += 1;
-            if coords.1 < (CHIP8_WIDTH - 1) as u8 {
-                coords.1 += 1;
-            } else {
-                break;
             }
         }
     }

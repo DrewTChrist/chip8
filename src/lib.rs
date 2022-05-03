@@ -512,8 +512,16 @@ where
     fn _fx33(&self, x: Nibble) {}
 
     /// fx55
-    fn _fx55(&self, x: Nibble) {}
+    fn _fx55(&mut self, x: Nibble) {
+        for i in 0..x as usize {
+            self.memory[self.index as usize + i] = self.registers[i];
+        }
+    }
 
     /// fx65
-    fn _fx65(&self, x: Nibble) {}
+    fn _fx65(&mut self, x: Nibble) {
+        for i in 0..x as usize {
+            self.registers[i] = self.memory[self.index as usize + i];
+        }
+    }
 }

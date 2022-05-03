@@ -499,7 +499,7 @@ where
         for i in 0..n as usize {
             let sprite = self.memory[(self.index as usize + i)];
             for j in 0..u8::BITS as usize {
-                if sprite & (1 << j) != 0 {
+                if sprite & (0x80 >> j) != 0 {
                     let point =
                         Point::new(((coords.0 + j) * 2) as i32, ((coords.1 + i) * 4) as i32);
                     let rect = &Rectangle::new(point, Size::new(2, 4));

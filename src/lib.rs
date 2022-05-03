@@ -2,9 +2,9 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
+pub mod fonts;
 pub mod keypad;
 pub mod roms;
-pub mod fonts;
 
 use embedded_graphics::{
     draw_target::DrawTarget, geometry::Point, pixelcolor::Rgb565, prelude::*, primitives::Rectangle,
@@ -238,13 +238,13 @@ where
                 update_pc = false;
             }
             0x3 => {
-                skip_instruction = self._3xnn(opcode.0, nn(opcode));
+                skip_instruction = self._3xnn(opcode.1, nn(opcode));
             }
             0x4 => {
-                skip_instruction = self._4xnn(opcode.0, nn(opcode));
+                skip_instruction = self._4xnn(opcode.1, nn(opcode));
             }
             0x5 => {
-                skip_instruction = self._5xy0(opcode.0, opcode.1);
+                skip_instruction = self._5xy0(opcode.1, opcode.2);
             }
             0x6 => {
                 self._6xnn(opcode.1, nn(opcode));
@@ -283,7 +283,7 @@ where
                 _ => {}
             },
             0x9 => {
-                skip_instruction = self._5xy0(opcode.0, opcode.1);
+                skip_instruction = self._9xy0(opcode.1, opcode.2);
             }
             0xa => {
                 self._annn(nnn(opcode));
@@ -402,11 +402,8 @@ where
 
     /// 7xnn Add nn to register vx
     fn _7xnn(&mut self, x: Nibble, nn: u8) {
-        if let Some(num) =  self.registers[x as usize].checked_add(nn) {
-            self.registers[x as usize] = num;
-        } else {
-            self.registers[x as usize] = 255;
-        }
+        let (new_x, over) = self.registers[x as usize].overflowing_add(nn);
+        self.registers[x as usize] = new_x;
     }
 
     /// 8xy0
@@ -431,42 +428,31 @@ where
 
     /// 8xy4
     fn _8xy4(&mut self, x: Nibble, y: Nibble) {
-        if let Some(num) =  self.registers[x as usize].checked_add(self.registers[y as usize]) {
-            self.registers[x as usize] = num;
-            self.registers[0xf] = 0;
-        } else {
-            self.registers[x as usize] = 255;
-            self.registers[0xf] = 1;
-        }
+        let (new_x, over) = self.registers[x as usize].overflowing_add(self.registers[y as usize]);
+        self.registers[x as usize] = new_x;
+        self.registers[0xf] = if over { 1 } else { 0 };
     }
 
     /// 8xy5
     fn _8xy5(&mut self, x: Nibble, y: Nibble) {
-        if let Some(num) =  self.registers[x as usize].checked_sub(self.registers[y as usize]) {
-            self.registers[x as usize] = num;
-            self.registers[0xf] = 1;
-        } else {
-            self.registers[x as usize] = 0;
-            self.registers[0xf] = 0;
-        }
+        let (new_x, over) = self.registers[x as usize].overflowing_sub(self.registers[y as usize]);
+        self.registers[x as usize] = new_x;
+        self.registers[0xf] = if over { 1 } else { 0 };
     }
 
     /// 8xy6
-    fn _8xy6(&mut self, x: Nibble, y: Nibble) {
-        if let Some(num) =  self.registers[y as usize].checked_sub(self.registers[x as usize]) {
-            self.registers[x as usize] = num;
-            self.registers[0xf] = 1;
-        } else {
-            self.registers[x as usize] = 0;
-            self.registers[0xf] = 0;
-        }
-    }
+    fn _8xy6(&mut self, x: Nibble, y: Nibble) {}
 
     /// 8xy7
-    fn _8xy7(&self, x: Nibble, y: Nibble) {}
+    fn _8xy7(&mut self, x: Nibble, y: Nibble) {
+        let (new_y, over) = self.registers[y as usize].overflowing_sub(self.registers[x as usize]);
+        self.registers[y as usize] = new_y;
+        self.registers[0xf] = if over { 1 } else { 0 };
+    }
 
     /// 8xye
-    fn _8xye(&self, x: Nibble, y: Nibble) {}
+    fn _8xye(&self, x: Nibble, y: Nibble) {
+    }
 
     /// 9xy0
     fn _9xy0(&self, x: Nibble, y: Nibble) -> bool {

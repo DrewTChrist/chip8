@@ -410,25 +410,57 @@ where
     }
 
     /// 8xy0
-    fn _8xy0(&self, x: Nibble, y: Nibble) {}
+    fn _8xy0(&mut self, x: Nibble, y: Nibble) {
+        self.registers[x as usize] = self.registers[y as usize];
+    }
 
     /// 8xy1
-    fn _8xy1(&self, x: Nibble, y: Nibble) {}
+    fn _8xy1(&mut self, x: Nibble, y: Nibble) {
+        self.registers[x as usize] = self.registers[x as usize] | self.registers[y as usize];
+    }
 
     /// 8xy2
-    fn _8xy2(&self, x: Nibble, y: Nibble) {}
+    fn _8xy2(&mut self, x: Nibble, y: Nibble) {
+        self.registers[x as usize] = self.registers[x as usize] & self.registers[y as usize];
+    }
 
     /// 8xy3
-    fn _8xy3(&self, x: Nibble, y: Nibble) {}
+    fn _8xy3(&mut self, x: Nibble, y: Nibble) {
+        self.registers[x as usize] = self.registers[x as usize] ^ self.registers[y as usize];
+    }
 
     /// 8xy4
-    fn _8xy4(&self, x: Nibble, y: Nibble) {}
+    fn _8xy4(&mut self, x: Nibble, y: Nibble) {
+        if let Some(num) =  self.registers[x as usize].checked_add(self.registers[y as usize]) {
+            self.registers[x as usize] = num;
+            self.registers[0xf] = 0;
+        } else {
+            self.registers[x as usize] = 255;
+            self.registers[0xf] = 1;
+        }
+    }
 
     /// 8xy5
-    fn _8xy5(&self, x: Nibble, y: Nibble) {}
+    fn _8xy5(&mut self, x: Nibble, y: Nibble) {
+        if let Some(num) =  self.registers[x as usize].checked_sub(self.registers[y as usize]) {
+            self.registers[x as usize] = num;
+            self.registers[0xf] = 1;
+        } else {
+            self.registers[x as usize] = 0;
+            self.registers[0xf] = 0;
+        }
+    }
 
     /// 8xy6
-    fn _8xy6(&self, x: Nibble, y: Nibble) {}
+    fn _8xy6(&mut self, x: Nibble, y: Nibble) {
+        if let Some(num) =  self.registers[y as usize].checked_sub(self.registers[x as usize]) {
+            self.registers[x as usize] = num;
+            self.registers[0xf] = 1;
+        } else {
+            self.registers[x as usize] = 0;
+            self.registers[0xf] = 0;
+        }
+    }
 
     /// 8xy7
     fn _8xy7(&self, x: Nibble, y: Nibble) {}

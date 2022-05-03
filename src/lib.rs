@@ -4,6 +4,7 @@
 
 pub mod keypad;
 pub mod roms;
+pub mod fonts;
 
 use embedded_graphics::{
     draw_target::DrawTarget, geometry::Point, pixelcolor::Rgb565, prelude::*, primitives::Rectangle,
@@ -97,7 +98,7 @@ where
         I: InputPin<Error = E>,
         R: RngCore,
     {
-        Self {
+        let mut s = Self {
             display,
             keypad,
             memory: [0; RAM_SIZE],
@@ -111,7 +112,9 @@ where
             pixels: [[false; CHIP8_HEIGHT]; CHIP8_WIDTH],
             rng,
             debug,
-        }
+        };
+        s._00e0();
+        s
     }
 
     /// Returns the current opcode
@@ -151,6 +154,14 @@ where
     /// Returns the display pixel grid
     pub fn get_pixels(&self) -> [[bool; CHIP8_HEIGHT]; CHIP8_WIDTH] {
         self.pixels
+    }
+
+    pub fn load_font<const S: usize>(&mut self, font: [u8; S]) {
+        let mut current = 0x50;
+        for byte in font {
+            self.memory[current] = byte;
+            current += 1;
+        }
     }
 
     /// Copies a chip8 program into memory
@@ -391,7 +402,11 @@ where
 
     /// 7xnn Add nn to register vx
     fn _7xnn(&mut self, x: Nibble, nn: u8) {
-        self.registers[x as usize] += nn;
+        if let Some(num) =  self.registers[x as usize].checked_add(nn) {
+            self.registers[x as usize] = num;
+        } else {
+            self.registers[x as usize] = 255;
+        }
     }
 
     /// 8xy0

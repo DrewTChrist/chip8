@@ -6,12 +6,7 @@ pub mod keypad;
 pub mod roms;
 
 use embedded_graphics::{
-    draw_target::DrawTarget,
-    geometry::Point,
-    pixelcolor::Rgb565,
-    prelude::*,
-    primitives::{PrimitiveStyle, Rectangle},
-    Drawable,
+    draw_target::DrawTarget, geometry::Point, pixelcolor::Rgb565, prelude::*, primitives::Rectangle,
 };
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use keypad::KeyPad;
@@ -85,6 +80,7 @@ where
     sound_timer: u8,
     pixels: [[bool; CHIP8_HEIGHT]; CHIP8_WIDTH],
     rng: R,
+    debug: bool,
 }
 
 impl<D, O, I, R> Chip8<D, O, I, R>
@@ -94,7 +90,7 @@ where
     I: InputPin,
     R: RngCore,
 {
-    pub fn new<E>(display: D, keypad: KeyPad<O, I>, rng: R) -> Self
+    pub fn new<E>(display: D, keypad: KeyPad<O, I>, rng: R, debug: bool) -> Self
     where
         D: OriginDimensions + DrawTarget<Color = Rgb565>,
         O: OutputPin<Error = E>,
@@ -114,6 +110,7 @@ where
             sound_timer: 0,
             pixels: [[false; CHIP8_HEIGHT]; CHIP8_WIDTH],
             rng,
+            debug,
         }
     }
 
@@ -244,9 +241,36 @@ where
             0x7 => {
                 self._7xnn(opcode.1, nn(opcode));
             }
-            0x8 => {
-                // decode further
-            }
+            0x8 => match opcode.3 {
+                0x0 => {
+                    self._8xy0(opcode.1, opcode.2);
+                }
+                0x1 => {
+                    self._8xy1(opcode.1, opcode.2);
+                }
+                0x2 => {
+                    self._8xy2(opcode.1, opcode.2);
+                }
+                0x3 => {
+                    self._8xy3(opcode.1, opcode.2);
+                }
+                0x4 => {
+                    self._8xy4(opcode.1, opcode.2);
+                }
+                0x5 => {
+                    self._8xy5(opcode.1, opcode.2);
+                }
+                0x6 => {
+                    self._8xy6(opcode.1, opcode.2);
+                }
+                0x7 => {
+                    self._8xy7(opcode.1, opcode.2);
+                }
+                0xe => {
+                    self._8xye(opcode.1, opcode.2);
+                }
+                _ => {}
+            },
             0x9 => {
                 skip_instruction = self._5xy0(opcode.0, opcode.1);
             }
@@ -263,12 +287,51 @@ where
             0xd => {
                 self._dxyn(opcode.1, opcode.2, opcode.3);
             }
-            0xe => {
-                // decode further
-            }
-            0xf => {
-                // decode further
-            }
+            0xe => match opcode.2 {
+                0x9 => {
+                    self._ex9e(opcode.1);
+                }
+                0xa => {
+                    self._exa1(opcode.1);
+                }
+                _ => {}
+            },
+            0xf => match opcode.2 {
+                0x0 => match opcode.3 {
+                    0x7 => {
+                        self._fx07(opcode.1);
+                    }
+                    0xa => {
+                        self._fx0a(opcode.1);
+                    }
+                    _ => {}
+                },
+                0x1 => match opcode.3 {
+                    0x5 => {
+                        self._fx15(opcode.1);
+                    }
+                    0x8 => {
+                        self._fx18(opcode.1);
+                    }
+                    0xe => {
+                        self._fx1e(opcode.1);
+                    }
+                    _ => {}
+                },
+                0x2 => {
+                    self._fx29(opcode.1);
+                }
+                0x3 => {
+                    self._fx33(opcode.1);
+                }
+                0x5 => {
+                    self._fx55(opcode.1);
+                }
+                0x6 => {
+                    self._fx65(opcode.1);
+                }
+                _ => {}
+            },
             _ => {}
         }
         if skip_instruction {
@@ -284,9 +347,8 @@ where
 
     /// 00e0 Clear screen
     fn _00e0(&mut self) {
-        let rect = Rectangle::new(Point::new(0, 0), self.display.size())
-            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK));
-        if rect.draw(&mut self.display).is_err() {}
+        let rect = &Rectangle::new(Point::new(0, 0), self.display.size());
+        if self.display.fill_solid(rect, Rgb565::BLACK).is_err() {}
     }
 
     /// 00ee return
@@ -351,13 +413,13 @@ where
     fn _8xy5(&self, x: Nibble, y: Nibble) {}
 
     /// 8xy6
-    fn _8xy6(&self, x: Nibble) {}
+    fn _8xy6(&self, x: Nibble, y: Nibble) {}
 
     /// 8xy7
     fn _8xy7(&self, x: Nibble, y: Nibble) {}
 
     /// 8xye
-    fn _8xye(&self, x: Nibble) {}
+    fn _8xye(&self, x: Nibble, y: Nibble) {}
 
     /// 9xy0
     fn _9xy0(&self, x: Nibble, y: Nibble) -> bool {
@@ -382,29 +444,25 @@ where
 
     /// dxyn draw screen
     fn _dxyn(&mut self, x: Nibble, y: Nibble, n: Nibble) {
-        let coords: (u8, u8) = (
-            self.registers[x as usize] % (CHIP8_WIDTH as u8),
-            self.registers[y as usize] % (CHIP8_HEIGHT as u8),
+        let coords: (usize, usize) = (
+            (self.registers[x as usize] % (CHIP8_WIDTH as u8)) as usize,
+            (self.registers[y as usize] % (CHIP8_HEIGHT as u8)) as usize,
         );
         self.registers[0xf] = 0;
-        for i in 0..n {
-            let sprite = self.memory[(self.index + i as u16) as usize];
-            for j in 0..u8::BITS {
+        for i in 0..n as usize {
+            let sprite = self.memory[(self.index as usize + i)];
+            for j in 0..u8::BITS as usize {
                 if sprite & (1 << j) != 0 {
-                    let point = Point::new(
-                        ((coords.0 + j as u8) * 2).into(),
-                        ((coords.1 + i as u8) * 4).into(),
-                    );
+                    let point =
+                        Point::new(((coords.0 + j) * 2) as i32, ((coords.1 + i) * 4) as i32);
                     let rect = &Rectangle::new(point, Size::new(2, 4));
-                    if self.pixels[(coords.0 + j as u8) as usize][(coords.1 + i as u8) as usize] {
+                    if self.pixels[coords.0 + j][coords.1 + i] {
                         if self.display.fill_solid(rect, Rgb565::BLACK).is_err() {}
-                        self.pixels[(coords.0 + j as u8) as usize][(coords.1 + i as u8) as usize] =
-                            false;
+                        self.pixels[coords.0 + j][coords.1 + i] = false;
                         self.registers[0xf] = 1;
                     } else {
                         if self.display.fill_solid(rect, Rgb565::WHITE).is_err() {}
-                        self.pixels[(coords.0 + j as u8) as usize][(coords.1 + i as u8) as usize] =
-                            true;
+                        self.pixels[coords.0 + j][coords.1 + i] = true;
                     }
                 }
             }

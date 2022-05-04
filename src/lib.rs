@@ -156,6 +156,7 @@ where
         self.pixels
     }
 
+    /// Copies a chip8 font into memory starting at 0x50
     pub fn load_font<const S: usize>(&mut self, font: [u8; S]) {
         let mut current = 0x50;
         for byte in font {
@@ -221,128 +222,112 @@ where
         let mut pc_increment: u16 = 2;
         let mut update_pc: bool = true;
         let mut skip_instruction: bool = false;
-        match opcode.0 {
-            0x0 => {
-                if opcode.3 == 0x0 {
-                    self._00e0();
-                } else if opcode.3 == 0xe {
-                    self._00ee();
-                }
+        match opcode {
+            (0x0, _, _, 0x0) => {
+                self._00e0();
             }
-            0x1 => {
+            (0x0, _, _, 0xe) => {
+                self._00ee();
+            }
+            (0x1, _, _, _) => {
                 self._1nnn(nnn(opcode));
                 update_pc = false;
             }
-            0x2 => {
+            (0x2, _, _, _) => {
                 self._2nnn(nnn(opcode));
                 update_pc = false;
             }
-            0x3 => {
+            (0x3, _, _, _) => {
                 skip_instruction = self._3xnn(opcode.1, nn(opcode));
             }
-            0x4 => {
+            (0x4, _, _, _) => {
                 skip_instruction = self._4xnn(opcode.1, nn(opcode));
             }
-            0x5 => {
+            (0x5, _, _, _) => {
                 skip_instruction = self._5xy0(opcode.1, opcode.2);
             }
-            0x6 => {
+            (0x6, _, _, _) => {
                 self._6xnn(opcode.1, nn(opcode));
             }
-            0x7 => {
+            (0x7, _, _, _) => {
                 self._7xnn(opcode.1, nn(opcode));
             }
-            0x8 => match opcode.3 {
-                0x0 => {
-                    self._8xy0(opcode.1, opcode.2);
-                }
-                0x1 => {
-                    self._8xy1(opcode.1, opcode.2);
-                }
-                0x2 => {
-                    self._8xy2(opcode.1, opcode.2);
-                }
-                0x3 => {
-                    self._8xy3(opcode.1, opcode.2);
-                }
-                0x4 => {
-                    self._8xy4(opcode.1, opcode.2);
-                }
-                0x5 => {
-                    self._8xy5(opcode.1, opcode.2);
-                }
-                0x6 => {
-                    self._8xy6(opcode.1, opcode.2);
-                }
-                0x7 => {
-                    self._8xy7(opcode.1, opcode.2);
-                }
-                0xe => {
-                    self._8xye(opcode.1, opcode.2);
-                }
-                _ => {}
-            },
-            0x9 => {
+            (0x8, _, _, 0x0) => {
+                self._8xy0(opcode.1, opcode.2);
+            }
+            (0x8, _, _, 0x1) => {
+                self._8xy1(opcode.1, opcode.2);
+            }
+            (0x8, _, _, 0x2) => {
+                self._8xy2(opcode.1, opcode.2);
+            }
+            (0x8, _, _, 0x3) => {
+                self._8xy3(opcode.1, opcode.2);
+            }
+            (0x8, _, _, 0x4) => {
+                self._8xy4(opcode.1, opcode.2);
+            }
+            (0x8, _, _, 0x5) => {
+                self._8xy5(opcode.1, opcode.2);
+            }
+            (0x8, _, _, 0x6) => {
+                self._8xy6(opcode.1, opcode.2);
+            }
+            (0x8, _, _, 0x7) => {
+                self._8xy7(opcode.1, opcode.2);
+            }
+            (0x8, _, _, 0xe) => {
+                self._8xye(opcode.1, opcode.2);
+            }
+            (0x9, _, _, _) => {
                 skip_instruction = self._9xy0(opcode.1, opcode.2);
             }
-            0xa => {
+            (0xa, _, _, _) => {
                 self._annn(nnn(opcode));
             }
-            0xb => {
+            (0xb, _, _, _) => {
                 self._bnnn(nnn(opcode));
                 update_pc = false;
             }
-            0xc => {
+            (0xc, _, _, _) => {
                 self._cxnn(opcode.1, nn(opcode));
             }
-            0xd => {
+            (0xd, _, _, _) => {
                 self._dxyn(opcode.1, opcode.2, opcode.3);
             }
-            0xe => match opcode.2 {
-                0x9 => {
-                    self._ex9e(opcode.1);
-                }
-                0xa => {
-                    self._exa1(opcode.1);
-                }
-                _ => {}
-            },
-            0xf => match opcode.2 {
-                0x0 => match opcode.3 {
-                    0x7 => {
-                        self._fx07(opcode.1);
-                    }
-                    0xa => {
-                        self._fx0a(opcode.1);
-                    }
-                    _ => {}
-                },
-                0x1 => match opcode.3 {
-                    0x5 => {
-                        self._fx15(opcode.1);
-                    }
-                    0x8 => {
-                        self._fx18(opcode.1);
-                    }
-                    0xe => {
-                        self._fx1e(opcode.1);
-                    }
-                    _ => {}
-                },
-                0x2 => {
-                    self._fx29(opcode.1);
-                }
-                0x3 => {
-                    self._fx33(opcode.1);
-                }
-                0x5 => {
-                    self._fx55(opcode.1);
-                }
-                0x6 => {
-                    self._fx65(opcode.1);
-                }
-                _ => {}
-            },
+            (0xe, _, 0x9, _) => {
+                self._ex9e(opcode.1);
+            }
+            (0xe, _, 0xa, _) => {
+                self._exa1(opcode.1);
+            }
+            (0xf, _, 0x0, 0x7) => {
+                self._fx07(opcode.1);
+            }
+            (0xf, _, 0x0, 0xa) => {
+                self._fx0a(opcode.1);
+            }
+            (0xf, _, 0x1, 0x5) => {
+                self._fx15(opcode.1);
+            }
+            (0xf, _, 0x1, 0x8) => {
+                self._fx18(opcode.1);
+            }
+            (0xf, _, 0x1, 0xe) => {
+                self._fx1e(opcode.1);
+            }
+            (0xf, _, 0x2, _) => {
+                self._fx29(opcode.1);
+            }
+            (0xf, _, 0x3, _) => {
+                self._fx33(opcode.1);
+            }
+            (0xf, _, 0x5, _) => {
+                self._fx55(opcode.1);
+            }
+            (0xf, _, 0x6, _) => {
+                self._fx65(opcode.1);
+            }
             _ => {}
         }
         if skip_instruction {
@@ -451,8 +436,7 @@ where
     }
 
     /// 8xye
-    fn _8xye(&self, x: Nibble, y: Nibble) {
-    }
+    fn _8xye(&self, x: Nibble, y: Nibble) {}
 
     /// 9xy0
     fn _9xy0(&self, x: Nibble, y: Nibble) -> bool {

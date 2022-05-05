@@ -13,9 +13,10 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 use keypad::KeyPad;
 use rand::RngCore;
 
-const NUM_REGISTERS: usize = 16;
 const RAM_SIZE: usize = 4096;
+const NUM_REGISTERS: usize = 16;
 const STACK_SIZE: usize = 16;
+const FONT_START: usize = 0x50;
 const PROGRAM_START: usize = 0x200;
 const PROGRAM_END: usize = 0xFFF;
 const CHIP8_HEIGHT: usize = 32;
@@ -81,6 +82,8 @@ where
     sound_timer: u8,
     pixels: [[bool; CHIP8_HEIGHT]; CHIP8_WIDTH],
     rng: R,
+    scale: (usize, usize),
+    padding: usize,
     debug: bool,
 }
 
@@ -111,6 +114,8 @@ where
             sound_timer: 0,
             pixels: [[false; CHIP8_HEIGHT]; CHIP8_WIDTH],
             rng,
+            scale: (1, 1),
+            padding: 0,
             debug,
         };
         s._00e0();
@@ -151,14 +156,9 @@ where
         self.registers
     }
 
-    /// Returns the display pixel grid
-    pub fn get_pixels(&self) -> [[bool; CHIP8_HEIGHT]; CHIP8_WIDTH] {
-        self.pixels
-    }
-
     /// Copies a chip8 font into memory starting at 0x50
     pub fn load_font<const S: usize>(&mut self, font: [u8; S]) {
-        let mut current = 0x50;
+        let mut current = FONT_START;
         for byte in font {
             self.memory[current] = byte;
             current += 1;
@@ -174,6 +174,19 @@ where
                 current += 1;
             }
         }
+    }
+
+    /// Sets an (x, y) scale to increase the drawing on the
+    /// display since Chip8 display is meant to be 64x32
+    ///
+    /// The default scale is (1, 1)
+    pub fn set_scale(&mut self, scale: (usize, usize)) {
+        self.scale = scale;
+    }
+
+    /// Sets a value to add padding to the left side of the display
+    pub fn set_padding(&mut self, left_padding: usize) {
+        self.padding = left_padding;
     }
 
     /// Resets the chip8 interpreter
@@ -470,9 +483,12 @@ where
             let sprite = self.memory[(self.index as usize + i)];
             for j in 0..u8::BITS as usize {
                 if sprite & (0x80 >> j) != 0 {
-                    let point =
-                        Point::new(((coords.0 + j) * 2) as i32, ((coords.1 + i) * 4) as i32);
-                    let rect = &Rectangle::new(point, Size::new(2, 4));
+                    let point = Point::new(
+                        (self.padding + (coords.0 + j) * self.scale.0) as i32,
+                        ((coords.1 + i) * self.scale.1) as i32,
+                    );
+                    let rect =
+                        &Rectangle::new(point, Size::new(self.scale.0 as u32, self.scale.1 as u32));
                     if self.pixels[coords.0 + j][coords.1 + i] {
                         if self.display.fill_solid(rect, Rgb565::BLACK).is_err() {}
                         self.pixels[coords.0 + j][coords.1 + i] = false;

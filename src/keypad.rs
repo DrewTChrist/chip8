@@ -27,4 +27,19 @@ where
     {
         Self { rows, cols }
     }
+    pub fn get(&mut self) -> (bool, u8) {
+        let mut key = (false, 0);
+        for (ri, row) in (&mut self.rows).iter_mut().enumerate() {
+            if row.set_low().is_err() {}
+            for (ci, col) in (&mut self.cols).iter_mut().enumerate() {
+                match col.is_low() {
+                    Ok(b) => {
+                        key = (true, (((ri + 1) * (ci + 1)) - 1) as u8);
+                    }
+                    Err(e) => {}
+                }
+            }
+        }
+        key
+    }
 }

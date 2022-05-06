@@ -309,10 +309,10 @@ where
                 self._dxyn(opcode.1, opcode.2, opcode.3);
             }
             (0xe, _, 0x9, _) => {
-                self._ex9e(opcode.1);
+                skip_instruction = self._ex9e(opcode.1);
             }
             (0xe, _, 0xa, _) => {
-                self._exa1(opcode.1);
+                skip_instruction = self._exa1(opcode.1);
             }
             (0xf, _, 0x0, 0x7) => {
                 self._fx07(opcode.1);
@@ -348,6 +348,14 @@ where
         }
         if update_pc {
             self.program_counter += pc_increment;
+        }
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
+
+        if self.sound_timer > 0 {
+            if self.sound_timer == 1 {}
+            self.sound_timer -= 1;
         }
     }
 
@@ -439,7 +447,11 @@ where
     }
 
     /// 8xy6
-    fn _8xy6(&mut self, x: Nibble, y: Nibble) {}
+    fn _8xy6(&mut self, x: Nibble, y: Nibble) {
+        let bit: u8 = self.registers[x as usize] & 1;
+        self.registers[x as usize] >>= 1;
+        self.registers[0xf] = bit;
+    }
 
     /// 8xy7
     fn _8xy7(&mut self, x: Nibble, y: Nibble) {
@@ -449,7 +461,11 @@ where
     }
 
     /// 8xye
-    fn _8xye(&self, x: Nibble, y: Nibble) {}
+    fn _8xye(&mut self, x: Nibble, y: Nibble) {
+        let bit: u8 = (self.registers[x as usize] & 8) >> 3;
+        self.registers[x as usize] <<= 1;
+        self.registers[0xf] = bit;
+    }
 
     /// 9xy0
     fn _9xy0(&self, x: Nibble, y: Nibble) -> bool {
@@ -468,7 +484,7 @@ where
 
     /// cxnn Random number
     fn _cxnn(&mut self, x: Nibble, nn: u8) {
-        let rand_num: u8 = (self.rng.next_u32() >> 28) as u8;
+        let rand_num: u8 = (self.rng.next_u32().to_le_bytes()[3]) as u8;
         self.registers[x as usize] = rand_num & nn;
     }
 
@@ -489,13 +505,15 @@ where
                     );
                     let rect =
                         &Rectangle::new(point, Size::new(self.scale.0 as u32, self.scale.1 as u32));
-                    if self.pixels[coords.0 + j][coords.1 + i] {
-                        if self.display.fill_solid(rect, Rgb565::BLACK).is_err() {}
-                        self.pixels[coords.0 + j][coords.1 + i] = false;
-                        self.registers[0xf] = 1;
-                    } else {
-                        if self.display.fill_solid(rect, Rgb565::WHITE).is_err() {}
-                        self.pixels[coords.0 + j][coords.1 + i] = true;
+                    if coords.0 + j < self.pixels.len() && coords.1 + i < self.pixels[0].len() {
+                        if self.pixels[coords.0 + j][coords.1 + i] {
+                            if self.display.fill_solid(rect, Rgb565::BLACK).is_err() {}
+                            self.pixels[coords.0 + j][coords.1 + i] = false;
+                            self.registers[0xf] = 1;
+                        } else {
+                            if self.display.fill_solid(rect, Rgb565::WHITE).is_err() {}
+                            self.pixels[coords.0 + j][coords.1 + i] = true;
+                        }
                     }
                 }
             }
@@ -503,42 +521,79 @@ where
     }
 
     /// ex9e
-    fn _ex9e(&self, x: Nibble) {}
+    fn _ex9e(&mut self, x: Nibble) -> bool {
+        let key = self.keypad.get();
+        if key.0 {
+            key.1 == self.registers[x as usize]
+        } else {
+            key.0
+        }
+    }
 
     /// exa1
-    fn _exa1(&self, x: Nibble) {}
+    fn _exa1(&mut self, x: Nibble) -> bool {
+        !self.keypad.get().0
+    }
 
     /// fx07
-    fn _fx07(&self, x: Nibble) {}
+    fn _fx07(&mut self, x: Nibble) {
+        self.registers[x as usize] = self.delay_timer;
+    }
 
     /// fx0a
-    fn _fx0a(&self, x: Nibble) {}
+    fn _fx0a(&mut self, x: Nibble) {
+        let mut key = (false, 0);
+        while !key.0 {
+            key = self.keypad.get();
+        }
+        self.registers[x as usize] = key.1;
+    }
 
     /// fx15
-    fn _fx15(&self, x: Nibble) {}
+    fn _fx15(&mut self, x: Nibble) {
+        self.delay_timer = self.registers[x as usize];
+    }
 
     /// fx18
-    fn _fx18(&self, x: Nibble) {}
+    fn _fx18(&mut self, x: Nibble) {
+        self.sound_timer = self.registers[x as usize];
+    }
 
     /// fx1e
-    fn _fx1e(&self, x: Nibble) {}
+    fn _fx1e(&mut self, x: Nibble) {
+        if ((self.index + x as u16) as usize) < RAM_SIZE {
+            self.index += x as u16;
+        } else {
+            self.index += x as u16;
+            self.registers[0xf] = 1;
+        }
+    }
 
     /// fx29
-    fn _fx29(&self, x: Nibble) {}
+    fn _fx29(&mut self, x: Nibble) {
+        let character = self.registers[x as usize];
+        self.index = self.memory[(FONT_START + (character * 5) as usize) as usize] as u16;
+    }
 
     /// fx33
-    fn _fx33(&self, x: Nibble) {}
+    fn _fx33(&mut self, x: Nibble) {
+        let num = self.registers[x as usize];
+        let digits = (num / 100, (num % 100) / 10, num % 10);
+        self.memory[self.index as usize] = digits.0;
+        self.memory[(self.index + 1) as usize] = digits.1;
+        self.memory[(self.index + 2) as usize] = digits.2;
+    }
 
     /// fx55
     fn _fx55(&mut self, x: Nibble) {
-        for i in 0..x as usize {
+        for i in 0..(x + 1) as usize {
             self.memory[self.index as usize + i] = self.registers[i];
         }
     }
 
     /// fx65
     fn _fx65(&mut self, x: Nibble) {
-        for i in 0..x as usize {
+        for i in 0..(x + 1) as usize {
             self.registers[i] = self.memory[self.index as usize + i];
         }
     }

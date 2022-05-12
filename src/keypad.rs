@@ -1,4 +1,5 @@
 use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::blocking::delay::DelayMs;
 
 const R: usize = 4;
 const C: usize = 4;
@@ -25,21 +26,40 @@ where
         O: OutputPin<Error = E>,
         I: InputPin<Error = E>,
     {
-        Self { rows, cols }
+        let mut s = Self { rows, cols };
+        for r in s.rows.iter_mut() {
+            if r.set_high().is_err() {
+            }
+        }
+        s
     }
-    pub fn get(&mut self) -> (bool, u8) {
-        let mut key = (false, 0);
-        for (ri, row) in (&mut self.rows).iter_mut().enumerate() {
+
+    pub fn get<D>(&mut self, delay: &mut D) -> (bool, u8) 
+    where
+        D: DelayMs<u32>
+    {
+        let mut index: u8 = 0;
+        for row in (&mut self.rows).iter_mut() {
             if row.set_low().is_err() {}
-            for (ci, col) in (&mut self.cols).iter_mut().enumerate() {
+            for col in (&mut self.cols).iter_mut() {
                 match col.is_low() {
-                    Ok(b) => {
-                        key = (true, (((ri + 1) * (ci + 1)) - 1) as u8);
+                    Ok(_) => {
+                        delay.delay_ms(10);
+                        match col.is_low() {
+                            Ok(b) => {
+                                if b {
+                                    return (b, index)
+                                }
+                            },
+                            Err(e) => {}
+                        }
                     }
                     Err(e) => {}
                 }
+                index += 1;
             }
+            if row.set_high().is_err() {}
         }
-        key
+        return (false, 0);
     }
 }

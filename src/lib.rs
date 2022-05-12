@@ -10,6 +10,7 @@ use embedded_graphics::{
     draw_target::DrawTarget, geometry::Point, pixelcolor::Rgb565, prelude::*, primitives::Rectangle,
 };
 use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::blocking::delay::DelayMs;
 use keypad::KeyPad;
 use rand::RngCore;
 
@@ -63,12 +64,13 @@ fn nn(opcode: OpcodeDecoded) -> u8 {
 /// Timing should be handled by the peripherals of
 /// your hardware. This Chip8 implementation makes no attempts to manage
 /// the speed of itself.
-pub struct Chip8<D, O, I, R>
+pub struct Chip8<D, O, I, R, DT>
 where
     D: DrawTarget,
     O: OutputPin,
     I: InputPin,
     R: RngCore,
+    DT: DelayMs<u32>
 {
     display: D,
     keypad: KeyPad<O, I>,
@@ -82,24 +84,27 @@ where
     sound_timer: u8,
     pixels: [[bool; CHIP8_HEIGHT]; CHIP8_WIDTH],
     rng: R,
+    delay: DT,
     scale: (usize, usize),
     padding: usize,
     debug: bool,
 }
 
-impl<D, O, I, R> Chip8<D, O, I, R>
+impl<D, O, I, R, DT> Chip8<D, O, I, R, DT>
 where
     D: OriginDimensions + DrawTarget<Color = Rgb565>,
     O: OutputPin,
     I: InputPin,
     R: RngCore,
+    DT: DelayMs<u32>
 {
-    pub fn new<E>(display: D, keypad: KeyPad<O, I>, rng: R, debug: bool) -> Self
+    pub fn new<E>(display: D, keypad: KeyPad<O, I>, rng: R, delay: DT, debug: bool) -> Self
     where
         D: OriginDimensions + DrawTarget<Color = Rgb565>,
         O: OutputPin<Error = E>,
         I: InputPin<Error = E>,
         R: RngCore,
+        DT: DelayMs<u32>
     {
         let mut s = Self {
             display,
@@ -114,6 +119,7 @@ where
             sound_timer: 0,
             pixels: [[false; CHIP8_HEIGHT]; CHIP8_WIDTH],
             rng,
+            delay,
             scale: (1, 1),
             padding: 0,
             debug,
@@ -522,7 +528,7 @@ where
 
     /// ex9e
     fn _ex9e(&mut self, x: Nibble) -> bool {
-        let key = self.keypad.get();
+        let key = self.keypad.get(&mut self.delay);
         if key.0 {
             key.1 == self.registers[x as usize]
         } else {
@@ -532,7 +538,7 @@ where
 
     /// exa1
     fn _exa1(&mut self, x: Nibble) -> bool {
-        !self.keypad.get().0
+        !self.keypad.get(&mut self.delay).0
     }
 
     /// fx07
@@ -544,7 +550,7 @@ where
     fn _fx0a(&mut self, x: Nibble) {
         let mut key = (false, 0);
         while !key.0 {
-            key = self.keypad.get();
+            key = self.keypad.get(&mut self.delay);
         }
         self.registers[x as usize] = key.1;
     }

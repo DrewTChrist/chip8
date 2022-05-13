@@ -39,8 +39,10 @@ where
         D: DelayMs<u32>
     {
         let mut index: u8 = 0;
+        let mut key: (bool, u8) = (false, 0);
         for row in (&mut self.rows).iter_mut() {
             if row.set_low().is_err() {}
+            delay.delay_ms(10);
             for col in (&mut self.cols).iter_mut() {
                 match col.is_low() {
                     Ok(_) => {
@@ -48,7 +50,8 @@ where
                         match col.is_low() {
                             Ok(b) => {
                                 if b {
-                                    return (b, index)
+                                    //return (b, index);
+                                    key = (true, index);
                                 }
                             },
                             Err(e) => {}
@@ -60,6 +63,7 @@ where
             }
             if row.set_high().is_err() {}
         }
-        return (false, 0);
+        //return (false, 0);
+        key
     }
 }

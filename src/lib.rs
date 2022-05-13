@@ -87,6 +87,7 @@ where
     delay: DT,
     scale: (usize, usize),
     padding: usize,
+    last_key: u8,
     debug: bool,
 }
 
@@ -122,6 +123,7 @@ where
             delay,
             scale: (1, 1),
             padding: 0,
+            last_key: 0,
             debug,
         };
         s._00e0();
@@ -160,6 +162,10 @@ where
     /// Returns the data registers
     pub fn get_registers(&self) -> [u8; NUM_REGISTERS] {
         self.registers
+    }
+
+    pub fn get_last_key(&self) -> u8 {
+        self.last_key
     }
 
     /// Copies a chip8 font into memory starting at 0x50
@@ -529,16 +535,15 @@ where
     /// ex9e
     fn _ex9e(&mut self, x: Nibble) -> bool {
         let key = self.keypad.get(&mut self.delay);
-        if key.0 {
-            key.1 == self.registers[x as usize]
-        } else {
-            key.0
-        }
+        self.last_key = key.1;
+        key.0 && key.1 == self.registers[x as usize] 
     }
 
     /// exa1
     fn _exa1(&mut self, x: Nibble) -> bool {
-        !self.keypad.get(&mut self.delay).0
+        let key = self.keypad.get(&mut self.delay);
+        self.last_key = key.1;
+        key.0 && key.1 != self.registers[x as usize]
     }
 
     /// fx07
@@ -551,6 +556,7 @@ where
         let mut key = (false, 0);
         while !key.0 {
             key = self.keypad.get(&mut self.delay);
+            self.last_key = key.1;
         }
         self.registers[x as usize] = key.1;
     }

@@ -4,7 +4,6 @@
 
 pub mod fonts;
 pub mod keypad;
-pub mod roms;
 
 use embedded_graphics::{
     draw_target::DrawTarget, geometry::Point, pixelcolor::Rgb565, prelude::*, primitives::Rectangle,

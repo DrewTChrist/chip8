@@ -178,13 +178,11 @@ where
     }
 
     /// Copies a chip8 program into memory
-    pub fn load_program<const S: usize>(&mut self, program: [u16; S]) {
+    pub fn load_program<const S: usize>(&mut self, program: &[u8; S]) {
         let mut current = PROGRAM_START;
-        for op in program {
-            for byte in op.to_be_bytes() {
-                self.memory[current] = byte;
-                current += 1;
-            }
+        for byte in program {
+            self.memory[current] = *byte;
+            current += 1;
         }
     }
 

@@ -1,5 +1,5 @@
-use embedded_hal::digital::v2::{InputPin, OutputPin};
 use embedded_hal::blocking::delay::DelayMs;
+use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 const R: usize = 4;
 const C: usize = 4;
@@ -28,15 +28,14 @@ where
     {
         let mut s = Self { rows, cols };
         for r in s.rows.iter_mut() {
-            if r.set_high().is_err() {
-            }
+            if r.set_high().is_err() {}
         }
         s
     }
 
-    pub fn get<D>(&mut self, delay: &mut D) -> (bool, u8) 
+    pub fn get<D>(&mut self, delay: &mut D) -> (bool, u8)
     where
-        D: DelayMs<u32>
+        D: DelayMs<u32>,
     {
         let mut index: u8 = 0;
         let mut key: (bool, u8) = (false, 0);
@@ -44,26 +43,18 @@ where
             if row.set_low().is_err() {}
             delay.delay_ms(10);
             for col in (&mut self.cols).iter_mut() {
-                match col.is_low() {
-                    Ok(_) => {
-                        delay.delay_ms(10);
-                        match col.is_low() {
-                            Ok(b) => {
-                                if b {
-                                    //return (b, index);
-                                    key = (true, index);
-                                }
-                            },
-                            Err(e) => {}
-                        }
+                if let Ok(_) = col.is_low() {
+                    delay.delay_ms(10);
+                    if let Ok(b) = col.is_low() {
+                            if b {
+                                key = (true, index);
+                            }
                     }
-                    Err(e) => {}
                 }
                 index += 1;
             }
             if row.set_high().is_err() {}
         }
-        //return (false, 0);
         key
     }
 }

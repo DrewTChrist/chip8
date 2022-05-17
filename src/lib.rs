@@ -1,5 +1,4 @@
 #![no_std]
-#![allow(dead_code)]
 #![allow(unused_variables)]
 
 pub mod fonts;
@@ -8,8 +7,8 @@ pub mod keypad;
 use embedded_graphics::{
     draw_target::DrawTarget, geometry::Point, pixelcolor::Rgb565, prelude::*, primitives::Rectangle,
 };
-use embedded_hal::digital::v2::{InputPin, OutputPin};
 use embedded_hal::blocking::delay::DelayMs;
+use embedded_hal::digital::v2::{InputPin, OutputPin};
 use keypad::KeyPad;
 use rand::RngCore;
 
@@ -69,13 +68,13 @@ where
     O: OutputPin,
     I: InputPin,
     R: RngCore,
-    DT: DelayMs<u32>
+    DT: DelayMs<u32>,
 {
     display: D,
     keypad: KeyPad<O, I>,
-    memory: [u8; RAM_SIZE],
+    pub memory: [u8; RAM_SIZE],
     stack: [u16; STACK_SIZE],
-    registers: [u8; NUM_REGISTERS],
+    pub registers: [u8; NUM_REGISTERS],
     index: u16,
     program_counter: u16,
     stack_pointer: usize,
@@ -87,7 +86,6 @@ where
     scale: (usize, usize),
     padding: usize,
     last_key: u8,
-    debug: bool,
 }
 
 impl<D, O, I, R, DT> Chip8<D, O, I, R, DT>
@@ -96,15 +94,15 @@ where
     O: OutputPin,
     I: InputPin,
     R: RngCore,
-    DT: DelayMs<u32>
+    DT: DelayMs<u32>,
 {
-    pub fn new<E>(display: D, keypad: KeyPad<O, I>, rng: R, delay: DT, debug: bool) -> Self
+    pub fn new<E>(display: D, keypad: KeyPad<O, I>, rng: R, delay: DT) -> Self
     where
         D: OriginDimensions + DrawTarget<Color = Rgb565>,
         O: OutputPin<Error = E>,
         I: InputPin<Error = E>,
         R: RngCore,
-        DT: DelayMs<u32>
+        DT: DelayMs<u32>,
     {
         let mut s = Self {
             display,
@@ -123,7 +121,6 @@ where
             scale: (1, 1),
             padding: 0,
             last_key: 0,
-            debug,
         };
         s._00e0();
         s
@@ -245,12 +242,8 @@ where
         let mut update_pc: bool = true;
         let mut skip_instruction: bool = false;
         match opcode {
-            (0x0, _, _, 0x0) => {
-                self._00e0();
-            }
-            (0x0, _, _, 0xe) => {
-                self._00ee();
-            }
+            (0x0, _, _, 0x0) => self._00e0(),
+            (0x0, _, _, 0xe) => self._00ee(),
             (0x1, _, _, _) => {
                 self._1nnn(nnn(opcode));
                 update_pc = false;
@@ -259,97 +252,39 @@ where
                 self._2nnn(nnn(opcode));
                 update_pc = false;
             }
-            (0x3, _, _, _) => {
-                skip_instruction = self._3xnn(opcode.1, nn(opcode));
-            }
-            (0x4, _, _, _) => {
-                skip_instruction = self._4xnn(opcode.1, nn(opcode));
-            }
-            (0x5, _, _, _) => {
-                skip_instruction = self._5xy0(opcode.1, opcode.2);
-            }
-            (0x6, _, _, _) => {
-                self._6xnn(opcode.1, nn(opcode));
-            }
-            (0x7, _, _, _) => {
-                self._7xnn(opcode.1, nn(opcode));
-            }
-            (0x8, _, _, 0x0) => {
-                self._8xy0(opcode.1, opcode.2);
-            }
-            (0x8, _, _, 0x1) => {
-                self._8xy1(opcode.1, opcode.2);
-            }
-            (0x8, _, _, 0x2) => {
-                self._8xy2(opcode.1, opcode.2);
-            }
-            (0x8, _, _, 0x3) => {
-                self._8xy3(opcode.1, opcode.2);
-            }
-            (0x8, _, _, 0x4) => {
-                self._8xy4(opcode.1, opcode.2);
-            }
-            (0x8, _, _, 0x5) => {
-                self._8xy5(opcode.1, opcode.2);
-            }
-            (0x8, _, _, 0x6) => {
-                self._8xy6(opcode.1, opcode.2);
-            }
-            (0x8, _, _, 0x7) => {
-                self._8xy7(opcode.1, opcode.2);
-            }
-            (0x8, _, _, 0xe) => {
-                self._8xye(opcode.1, opcode.2);
-            }
-            (0x9, _, _, _) => {
-                skip_instruction = self._9xy0(opcode.1, opcode.2);
-            }
-            (0xa, _, _, _) => {
-                self._annn(nnn(opcode));
-            }
+            (0x3, _, _, _) => skip_instruction = self._3xnn(opcode.1, nn(opcode)),
+            (0x4, _, _, _) => skip_instruction = self._4xnn(opcode.1, nn(opcode)),
+            (0x5, _, _, _) => skip_instruction = self._5xy0(opcode.1, opcode.2),
+            (0x6, _, _, _) => self._6xnn(opcode.1, nn(opcode)),
+            (0x7, _, _, _) => self._7xnn(opcode.1, nn(opcode)),
+            (0x8, _, _, 0x0) => self._8xy0(opcode.1, opcode.2),
+            (0x8, _, _, 0x1) => self._8xy1(opcode.1, opcode.2),
+            (0x8, _, _, 0x2) => self._8xy2(opcode.1, opcode.2),
+            (0x8, _, _, 0x3) => self._8xy3(opcode.1, opcode.2),
+            (0x8, _, _, 0x4) => self._8xy4(opcode.1, opcode.2),
+            (0x8, _, _, 0x5) => self._8xy5(opcode.1, opcode.2),
+            (0x8, _, _, 0x6) => self._8xy6(opcode.1, opcode.2),
+            (0x8, _, _, 0x7) => self._8xy7(opcode.1, opcode.2),
+            (0x8, _, _, 0xe) => self._8xye(opcode.1, opcode.2),
+            (0x9, _, _, _) => skip_instruction = self._9xy0(opcode.1, opcode.2),
+            (0xa, _, _, _) => self._annn(nnn(opcode)),
             (0xb, _, _, _) => {
                 self._bnnn(nnn(opcode));
                 update_pc = false;
             }
-            (0xc, _, _, _) => {
-                self._cxnn(opcode.1, nn(opcode));
-            }
-            (0xd, _, _, _) => {
-                self._dxyn(opcode.1, opcode.2, opcode.3);
-            }
-            (0xe, _, 0x9, _) => {
-                skip_instruction = self._ex9e(opcode.1);
-            }
-            (0xe, _, 0xa, _) => {
-                skip_instruction = self._exa1(opcode.1);
-            }
-            (0xf, _, 0x0, 0x7) => {
-                self._fx07(opcode.1);
-            }
-            (0xf, _, 0x0, 0xa) => {
-                self._fx0a(opcode.1);
-            }
-            (0xf, _, 0x1, 0x5) => {
-                self._fx15(opcode.1);
-            }
-            (0xf, _, 0x1, 0x8) => {
-                self._fx18(opcode.1);
-            }
-            (0xf, _, 0x1, 0xe) => {
-                self._fx1e(opcode.1);
-            }
-            (0xf, _, 0x2, _) => {
-                self._fx29(opcode.1);
-            }
-            (0xf, _, 0x3, _) => {
-                self._fx33(opcode.1);
-            }
-            (0xf, _, 0x5, _) => {
-                self._fx55(opcode.1);
-            }
-            (0xf, _, 0x6, _) => {
-                self._fx65(opcode.1);
-            }
+            (0xc, _, _, _) => self._cxnn(opcode.1, nn(opcode)),
+            (0xd, _, _, _) => self._dxyn(opcode.1, opcode.2, opcode.3),
+            (0xe, _, 0x9, _) => skip_instruction = self._ex9e(opcode.1),
+            (0xe, _, 0xa, _) => skip_instruction = self._exa1(opcode.1),
+            (0xf, _, 0x0, 0x7) => self._fx07(opcode.1),
+            (0xf, _, 0x0, 0xa) => self._fx0a(opcode.1),
+            (0xf, _, 0x1, 0x5) => self._fx15(opcode.1),
+            (0xf, _, 0x1, 0x8) => self._fx18(opcode.1),
+            (0xf, _, 0x1, 0xe) => self._fx1e(opcode.1),
+            (0xf, _, 0x2, _) => self._fx29(opcode.1),
+            (0xf, _, 0x3, _) => self._fx33(opcode.1),
+            (0xf, _, 0x5, _) => self._fx55(opcode.1),
+            (0xf, _, 0x6, _) => self._fx65(opcode.1),
             _ => {}
         }
         if skip_instruction {
@@ -367,9 +302,6 @@ where
             self.sound_timer -= 1;
         }
     }
-
-    /// 0nnn
-    fn _0nnn(&self, nnn: u8) {}
 
     /// 00e0 Clear screen
     fn _00e0(&mut self) {
@@ -428,17 +360,17 @@ where
 
     /// 8xy1
     fn _8xy1(&mut self, x: Nibble, y: Nibble) {
-        self.registers[x as usize] = self.registers[x as usize] | self.registers[y as usize];
+        self.registers[x as usize] |= self.registers[y as usize];
     }
 
     /// 8xy2
     fn _8xy2(&mut self, x: Nibble, y: Nibble) {
-        self.registers[x as usize] = self.registers[x as usize] & self.registers[y as usize];
+        self.registers[x as usize] &= self.registers[y as usize];
     }
 
     /// 8xy3
     fn _8xy3(&mut self, x: Nibble, y: Nibble) {
-        self.registers[x as usize] = self.registers[x as usize] ^ self.registers[y as usize];
+        self.registers[x as usize] ^= self.registers[y as usize];
     }
 
     /// 8xy4
@@ -533,7 +465,7 @@ where
     fn _ex9e(&mut self, x: Nibble) -> bool {
         let key = self.keypad.get(&mut self.delay);
         self.last_key = key.1;
-        key.0 && key.1 == self.registers[x as usize] 
+        key.0 && key.1 == self.registers[x as usize]
     }
 
     /// exa1

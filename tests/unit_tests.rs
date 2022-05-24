@@ -163,4 +163,47 @@ mod chip8 {
         assert_eq!(chip8.registers[0x0], 0x00);
         assert_eq!(chip8.get_program_counter(), 0x202);
     }
+
+    #[test]
+    fn _fx55() {
+        let mut chip8 = get_fixture_no_keypad();
+        chip8.load_program(&[0xff, 0x55]);
+        chip8.index = 0x203;
+        chip8.registers[0x00] = 0xff;
+        chip8.registers[0x01] = 0xff;
+        chip8.registers[0x02] = 0xff;
+        chip8.registers[0x03] = 0xff;
+        chip8.registers[0x04] = 0xff;
+        chip8.registers[0x05] = 0xff;
+        chip8.registers[0x06] = 0xff;
+        chip8.registers[0x07] = 0xff;
+        chip8.registers[0x08] = 0xff;
+        chip8.registers[0x09] = 0xff;
+        chip8.registers[0x0a] = 0xff;
+        chip8.registers[0x0b] = 0xff;
+        chip8.registers[0x0c] = 0xff;
+        chip8.registers[0x0d] = 0xff;
+        chip8.registers[0x0e] = 0xff;
+        chip8.registers[0x0f] = 0xff;
+        chip8.tick();
+        assert_eq!(chip8.get_program_counter(), 0x202);
+        assert_eq!(chip8.get_program_memory()[0x03], 0xff);
+        assert_eq!(chip8.get_program_memory()[0x12], 0xff);
+    }
+
+    #[test]
+    fn _fx65() {
+        let mut chip8 = get_fixture_no_keypad();
+        chip8.load_program(&[
+            0xff, 0x65, 0x00, 0xff, 0xff, 
+            0xff, 0xff, 0xff, 0xff, 0xff, 
+            0xff, 0xff, 0xff, 0xff, 0xff, 
+            0xff, 0xff, 0xff, 0xff,
+        ]);
+        chip8.index = 0x203;
+        chip8.tick();
+        assert_eq!(chip8.get_program_counter(), 0x202);
+        assert_eq!(chip8.get_registers()[0x0], 0xff);
+        assert_eq!(chip8.get_registers()[0xf], 0xff);
+    }
 }

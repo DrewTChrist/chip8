@@ -45,10 +45,8 @@ where
             for col in (&mut self.cols).iter_mut() {
                 if let Ok(_) = col.is_low() {
                     delay.delay_ms(10);
-                    if let Ok(b) = col.is_low() {
-                            if b {
-                                key = (true, index);
-                            }
+                    if col.is_low().is_ok() {
+                        key = (true, index);
                     }
                 }
                 index += 1;

@@ -72,10 +72,10 @@ where
 {
     display: D,
     keypad: KeyPad<O, I>,
-    pub memory: [u8; RAM_SIZE],
-    pub stack: [u16; STACK_SIZE],
-    pub registers: [u8; NUM_REGISTERS],
-    pub index: u16,
+    memory: [u8; RAM_SIZE],
+    stack: [u16; STACK_SIZE],
+    registers: [u8; NUM_REGISTERS],
+    index: u16,
     program_counter: u16,
     stack_pointer: usize,
     delay_timer: u8,
@@ -140,9 +140,19 @@ where
         &self.memory[PROGRAM_START..PROGRAM_END]
     }
 
+    /// Writes a byte to memory
+    pub fn write_memory(&mut self, index: u16, data: u8) {
+        self.memory[index as usize] = data;
+    }
+
     /// Returns the value of PC or program counter
     pub fn get_program_counter(&self) -> u16 {
         self.program_counter
+    }
+
+    /// Sets the program counter
+    pub fn set_program_counter(&mut self, value: u16) {
+        self.program_counter = value;
     }
 
     /// Returns the value in the I register
@@ -150,9 +160,29 @@ where
         self.index
     }
 
+    /// Sets the index
+    pub fn set_index(&mut self, value: u16) {
+        self.index = value;
+    }
+
     /// Returns the stack
     pub fn get_stack(&self) -> [u16; STACK_SIZE] {
         self.stack
+    }
+
+    /// Writes a u16 to the stack
+    pub fn write_stack(&mut self, index: u8, data: u16) {
+        self.stack[index as usize] = data;
+    }
+
+    /// Gets the stack pointer
+    pub fn get_stack_pointer(&self) -> usize {
+        self.stack_pointer
+    }
+    
+    /// Sets the stack pointer
+    pub fn set_stack_pointer(&mut self, value: usize) {
+        self.stack_pointer = value;
     }
 
     /// Returns the data registers
@@ -160,6 +190,12 @@ where
         self.registers
     }
 
+    /// Writes a byte to a register
+    pub fn write_register(&mut self, index: u8, data: u8) {
+        self.registers[index as usize] = data;
+    }
+
+    /// Gets the last key pressed
     pub fn get_last_key(&self) -> u8 {
         self.last_key
     }

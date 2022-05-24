@@ -165,6 +165,19 @@ mod chip8 {
     }
 
     #[test]
+    fn _fx33() {
+        let mut chip8 = get_fixture_no_keypad();
+        chip8.load_program(&[0xf0, 0x33]);
+        chip8.write_register(0x0, 0xff);
+        chip8.set_index(0x202);
+        chip8.tick();
+        assert_eq!(chip8.get_program_counter(), 0x202);
+        assert_eq!(chip8.get_program_memory()[0x2], 0x2);
+        assert_eq!(chip8.get_program_memory()[0x3], 0x5);
+        assert_eq!(chip8.get_program_memory()[0x4], 0x5);
+    }
+
+    #[test]
     fn _fx55() {
         let mut chip8 = get_fixture_no_keypad();
         chip8.load_program(&[0xff, 0x55]);
@@ -185,6 +198,7 @@ mod chip8 {
         chip8.write_register(0x0d, 0xff);
         chip8.write_register(0x0e, 0xff);
         chip8.write_register(0x0f, 0xff);
+        println!("{:#?}", chip8.get_current_op());
         chip8.tick();
         assert_eq!(chip8.get_program_counter(), 0x202);
         assert_eq!(chip8.get_program_memory()[0x03], 0xff);

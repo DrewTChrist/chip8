@@ -39,11 +39,11 @@ where
     {
         let mut index: u8 = 0;
         let mut key: (bool, u8) = (false, 0);
-        for row in (&mut self.rows).iter_mut() {
+        for row in self.rows.iter_mut() {
             if row.set_low().is_err() {}
             delay.delay_ms(10);
-            for col in (&mut self.cols).iter_mut() {
-                if let Ok(_) = col.is_low() {
+            for col in self.cols.iter_mut() {
+                if col.is_low().is_ok() {
                     delay.delay_ms(10);
                     if col.is_low().is_ok() {
                         key = (true, index);

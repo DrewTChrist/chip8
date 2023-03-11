@@ -179,7 +179,7 @@ where
     pub fn get_stack_pointer(&self) -> usize {
         self.stack_pointer
     }
-    
+
     /// Sets the stack pointer
     pub fn set_stack_pointer(&mut self, value: usize) {
         self.stack_pointer = value;
@@ -461,7 +461,7 @@ where
 
     /// cxnn Random number
     fn _cxnn(&mut self, x: Nibble, nn: u8) {
-        let rand_num: u8 = (self.rng.next_u32().to_le_bytes()[3]) as u8;
+        let rand_num: u8 = self.rng.next_u32().to_le_bytes()[3];
         self.registers[x as usize] = rand_num & nn;
     }
 
@@ -549,7 +549,7 @@ where
     /// fx29
     fn _fx29(&mut self, x: Nibble) {
         let character = self.registers[x as usize];
-        self.index = self.memory[(FONT_START + (character * 5) as usize) as usize] as u16;
+        self.index = self.memory[FONT_START + (character * 5) as usize] as u16;
     }
 
     /// fx33

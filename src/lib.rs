@@ -243,6 +243,7 @@ where
         self.delay_timer = 0;
         self.sound_timer = 0;
         self.pixels = [[false; CHIP8_HEIGHT]; CHIP8_WIDTH];
+        self._00e0();
     }
 
     /// This should be called within a loop

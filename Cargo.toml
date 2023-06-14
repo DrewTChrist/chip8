@@ -11,7 +11,7 @@ edition = "2021"
 
 [dependencies]
 embedded-hal = { version = "0.2", features=["unproven"] }
-embedded-graphics = "0.7.1"
+embedded-graphics = "0.8"
 rand = { version = "0.8.4", default-features = false }
 
 [dev-dependencies]
